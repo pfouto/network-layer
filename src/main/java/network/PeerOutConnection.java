@@ -37,7 +37,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
 
     private Map<Channel, NetworkMessage> transientChannels;
 
-    private Map<Byte, ISerializer> serializers;
+    private Map<Short, ISerializer> serializers;
     private NetworkConfiguration config;
 
     enum Status {DISCONNECTED, ACTIVE, HANDSHAKING, TERMINATED}
@@ -45,7 +45,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     private boolean outsideNodeUp;
 
     PeerOutConnection(Host peerHost, Host myHost, Bootstrap bootstrap, Set<INodeListener> nodeListeners,
-                      Map<Byte, ISerializer> serializers, NetworkConfiguration config) {
+                      Map<Short, ISerializer> serializers, NetworkConfiguration config) {
         this.peerHost = peerHost;
         this.myHost = myHost;
         this.nodeListeners = nodeListeners;

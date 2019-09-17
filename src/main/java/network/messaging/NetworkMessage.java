@@ -2,10 +2,10 @@ package network.messaging;
 
 public class NetworkMessage
 {
-    public final byte code;
+    public final short code;
     public final Object payload;
 
-    public NetworkMessage(byte code, Object payload){
+    public NetworkMessage(short code, Object payload){
         this.code = code;
         this.payload = payload;
     }

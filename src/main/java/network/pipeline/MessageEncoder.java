@@ -14,9 +14,9 @@ public class MessageEncoder extends MessageToByteEncoder<NetworkMessage>
 {
     private static final Logger logger = LogManager.getLogger(MessageEncoder.class);
 
-    private Map<Byte, ISerializer> serializers;
+    private Map<Short, ISerializer> serializers;
 
-    public MessageEncoder(Map<Byte, ISerializer> serializers)
+    public MessageEncoder(Map<Short, ISerializer> serializers)
     {
         this.serializers = serializers;
     }
@@ -25,8 +25,8 @@ public class MessageEncoder extends MessageToByteEncoder<NetworkMessage>
     protected void encode(ChannelHandlerContext ctx, NetworkMessage msg, ByteBuf out)
     {
         ISerializer iSerializer = serializers.get(msg.code);
-        out.writeInt(iSerializer.serializedSize(msg.payload) + 1);
-        out.writeByte(msg.code);
+        out.writeInt(iSerializer.serializedSize(msg.payload) + 2);
+        out.writeShort(msg.code);
         iSerializer.serialize(msg.payload, out);
 
         assert out.writerIndex() == iSerializer.serializedSize(msg.payload) + 1 + 4;

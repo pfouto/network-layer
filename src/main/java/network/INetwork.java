@@ -12,15 +12,15 @@ public interface INetwork
 
     boolean isConnectionActive(Host peerHost);
 
-    void sendMessage(byte msgCode, Object payload, Host to, boolean newChannel);
+    void sendMessage(short msgCode, Object payload, Host to, boolean newChannel);
 
-    void sendMessage(byte msgCode, Object msg, Host to);
+    void sendMessage(short msgCode, Object msg, Host to);
 
-    void broadcastMessage(byte msgCode, Object msg, Iterator<Host> targets);
+    void broadcastMessage(short msgCode, Object msg, Iterator<Host> targets);
 
-    void registerConsumer(byte messageCode, IMessageConsumer consumer);
+    void registerConsumer(short messageCode, IMessageConsumer consumer);
 
-    void registerSerializer(byte messageCode, ISerializer serializer);
+    void registerSerializer(short messageCode, ISerializer serializer);
 
     void registerNodeListener(INodeListener listener);
 

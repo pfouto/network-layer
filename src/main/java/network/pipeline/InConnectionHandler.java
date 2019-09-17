@@ -15,10 +15,10 @@ import java.util.Map;
 public class InConnectionHandler extends ChannelDuplexHandler {
     private static final Logger logger = LogManager.getLogger(InConnectionHandler.class);
 
-    private Map<Byte, IMessageConsumer> messageConsumers;
+    private Map<Short, IMessageConsumer> messageConsumers;
     private Host peerHost;
 
-    InConnectionHandler(Host peerHost, Map<Byte, IMessageConsumer> messageConsumers) {
+    InConnectionHandler(Host peerHost, Map<Short, IMessageConsumer> messageConsumers) {
         this.peerHost = peerHost;
         this.messageConsumers = messageConsumers;
     }

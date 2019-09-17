@@ -8,7 +8,7 @@ import java.net.UnknownHostException;
 public abstract class ControlMessage
 {
 
-    public final static byte MSG_CODE = 0;
+    public final static short MSG_CODE = 0;
 
     interface ControlMessageSerializer<T extends ControlMessage> extends ISerializer<T> {}
 

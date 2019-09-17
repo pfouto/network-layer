@@ -16,9 +16,9 @@ public class InHandshakeHandler extends ChannelDuplexHandler {
 
     private static final Logger logger = LogManager.getLogger(InHandshakeHandler.class);
 
-    private Map<Byte, IMessageConsumer> messageConsumers;
+    private Map<Short, IMessageConsumer> messageConsumers;
 
-    public InHandshakeHandler(Map<Byte, IMessageConsumer> messageConsumers) {
+    public InHandshakeHandler(Map<Short, IMessageConsumer> messageConsumers) {
         this.messageConsumers = messageConsumers;
     }
 

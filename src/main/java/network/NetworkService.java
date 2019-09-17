@@ -38,8 +38,8 @@ public class NetworkService implements INetwork {
     private Map<Host, PeerOutConnection> knownPeers = new ConcurrentHashMap<>();
 
     private Set<INodeListener> nodeListeners = ConcurrentHashMap.newKeySet();
-    private Map<Byte, ISerializer> serializers = new ConcurrentHashMap<>();
-    private Map<Byte, IMessageConsumer> messageConsumers = new ConcurrentHashMap<>();
+    private Map<Short, ISerializer> serializers = new ConcurrentHashMap<>();
+    private Map<Short, IMessageConsumer> messageConsumers = new ConcurrentHashMap<>();
 
     private NetworkConfiguration config;
 
@@ -68,13 +68,13 @@ public class NetworkService implements INetwork {
     }
 
     @Override
-    public void registerConsumer(byte msgCode, IMessageConsumer consumer) {
+    public void registerConsumer(short msgCode, IMessageConsumer consumer) {
         if (messageConsumers.putIfAbsent(msgCode, consumer) != null)
             throw new AssertionError("Trying to re-register consumer in NetworkService: " + msgCode);
     }
 
     @Override
-    public void registerSerializer(byte msgCode, ISerializer serializer) {
+    public void registerSerializer(short msgCode, ISerializer serializer) {
         if (serializers.putIfAbsent(msgCode, serializer) != null)
             throw new AssertionError("Trying to re-register serializer in NetworkService" + msgCode);
     }
@@ -104,7 +104,7 @@ public class NetworkService implements INetwork {
     }
 
     @Override
-    public void sendMessage(byte msgCode, Object payload, Host to, boolean newChannel) {
+    public void sendMessage(short msgCode, Object payload, Host to, boolean newChannel) {
 
         logger.debug((newChannel ? "Transient " : " ") + "To " + to + ": " + payload.toString());
 
@@ -129,12 +129,12 @@ public class NetworkService implements INetwork {
     }
 
     @Override
-    public void sendMessage(byte msgCode, Object payload, Host to) {
+    public void sendMessage(short msgCode, Object payload, Host to) {
         sendMessage(msgCode, payload, to, false);
     }
 
     @Override
-    public void broadcastMessage(byte msgCode, Object payload, Iterator<Host> targets) {
+    public void broadcastMessage(short msgCode, Object payload, Iterator<Host> targets) {
         while (targets.hasNext()) {
             Host h = targets.next();
             sendMessage(msgCode, payload, h);

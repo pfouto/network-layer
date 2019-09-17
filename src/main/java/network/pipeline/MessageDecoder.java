@@ -17,9 +17,9 @@ public class MessageDecoder extends ByteToMessageDecoder
 
     private static final Logger logger = LogManager.getLogger(MessageDecoder.class);
 
-    private Map<Byte, ISerializer> serializers;
+    private Map<Short, ISerializer> serializers;
 
-    public MessageDecoder(Map<Byte, ISerializer> serializers)
+    public MessageDecoder(Map<Short, ISerializer> serializers)
     {
         this.serializers = serializers;
     }
@@ -36,7 +36,7 @@ public class MessageDecoder extends ByteToMessageDecoder
         }
         in.skipBytes(4);
 
-        byte code = in.readByte();
+        short code = in.readShort();
         Object payload = serializers.get(code).deserialize(in);
         NetworkMessage networkMessage = new NetworkMessage(code, payload);
         out.add(networkMessage);
