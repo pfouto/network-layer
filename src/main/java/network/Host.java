@@ -7,22 +7,49 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Objects;
 
+/**
+ * Represents a node in the network layer, including its IP Address and listen port
+ *
+ * @author pfouto
+ */
 public class Host implements Comparable<Host> {
     private final int port;
     private final InetAddress address;
     private final byte[] addressBytes;
 
+    /**
+     * Creates a new host with the given address and port
+     *
+     * @param address The address of the host to create
+     * @param port    The port of the host to create
+     */
     public Host(InetAddress address, int port) {
         this(address, address.getAddress(), port);
     }
 
-    public Host(InetAddress address, byte[] addressBytes, int port) {
-        if(!(address instanceof Inet4Address))
+    private Host(InetAddress address, byte[] addressBytes, int port) {
+        if (!(address instanceof Inet4Address))
             throw new AssertionError(address + " not and IPv4 address");
         this.address = address;
         this.port = port;
         this.addressBytes = addressBytes;
         assert addressBytes.length == 4;
+    }
+
+    /**
+     * Gets the address of this host
+     * @return The INetAddress
+     */
+    public InetAddress getAddress() {
+        return address;
+    }
+
+    /**
+     * Gets the port of this host
+     * @return  The port
+     */
+    public int getPort() {
+        return port;
     }
 
     @Override
@@ -41,14 +68,6 @@ public class Host implements Comparable<Host> {
     @Override
     public int hashCode() {
         return Objects.hash(port, address);
-    }
-
-    public InetAddress getAddress() {
-        return address;
-    }
-
-    public int getPort() {
-        return port;
     }
 
     public void serialize(ByteBuf out) {

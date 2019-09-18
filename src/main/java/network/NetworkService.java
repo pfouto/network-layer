@@ -226,9 +226,4 @@ public class NetworkService implements INetwork {
             throw new Exception("Interface " + interfaceName + " caused an exception", e);
         }
     }
-
-    @Override
-    public int getnSent() {
-        return nSent;
-    }
 }

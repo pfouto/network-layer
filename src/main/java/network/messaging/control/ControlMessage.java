@@ -5,12 +5,12 @@ import network.ISerializer;
 
 import java.net.UnknownHostException;
 
-public abstract class ControlMessage
-{
+public abstract class ControlMessage {
 
     public final static short MSG_CODE = 0;
 
-    interface ControlMessageSerializer<T extends ControlMessage> extends ISerializer<T> {}
+    interface ControlMessageSerializer<T extends ControlMessage> extends ISerializer<T> {
+    }
 
     public enum Type {
         HEARTBEAT(0, HeartbeatMessage.serializer),
@@ -20,6 +20,7 @@ public abstract class ControlMessage
         private final ControlMessageSerializer<ControlMessage> serializer;
 
         private static final Type[] opcodeIdx;
+
         static {
             int maxOpcode = -1;
             for (Type type : Type.values())
@@ -37,7 +38,6 @@ public abstract class ControlMessage
             this.serializer = serializer;
         }
 
-        @SuppressWarnings("Duplicates")
         public static Type fromOpcode(int opcode) {
             if (opcode >= opcodeIdx.length || opcode < 0)
                 throw new AssertionError(String.format("Unknown opcode %d", opcode));
@@ -51,31 +51,26 @@ public abstract class ControlMessage
     public final Type type;
     private volatile int serializedSize = -1;
 
-    ControlMessage(Type type){
+    ControlMessage(Type type) {
         this.type = type;
     }
 
-    public static final ISerializer<ControlMessage> serializer = new ISerializer<ControlMessage>()
-    {
+    public static final ISerializer<ControlMessage> serializer = new ISerializer<ControlMessage>() {
         @Override
-        public void serialize(ControlMessage message, ByteBuf out)
-        {
+        public void serialize(ControlMessage message, ByteBuf out) {
             out.writeInt(message.type.opcode);
             message.type.serializer.serialize(message, out);
         }
 
         @Override
-        public ControlMessage deserialize(ByteBuf in) throws UnknownHostException
-        {
+        public ControlMessage deserialize(ByteBuf in) throws UnknownHostException {
             Type type = Type.fromOpcode(in.readInt());
             return type.serializer.deserialize(in);
         }
 
-        @SuppressWarnings("Duplicates")
         @Override
-        public int serializedSize(ControlMessage message)
-        {
-            if(message.serializedSize != -1)
+        public int serializedSize(ControlMessage message) {
+            if (message.serializedSize != -1)
                 return message.serializedSize; //only calc once
             int size = 4; // type;
             size += message.type.serializer.serializedSize(message);
