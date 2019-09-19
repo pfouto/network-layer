@@ -43,10 +43,7 @@ public class NetworkService implements INetwork {
 
     private NetworkConfiguration config;
 
-    private int nSent;
-
     public NetworkService(Properties props) throws Exception {
-        nSent = 0;
         config = new NetworkConfiguration(props);
         myHost = readHost();
         clientBootstrap = setupClientBootstrap();
@@ -113,7 +110,6 @@ public class NetworkService implements INetwork {
             return;
         }
 
-        nSent++;
         PeerOutConnection connection = knownPeers.get(to);
         if (connection == null) {
             logger.error("Sending message to unknown peer... forgot to use addPeer? " + payload + " " + to);
