@@ -106,7 +106,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
             channel.flush();
     }
 
-    //TODO maybe call this in "sendMessage" instead of timer...
+    //TODO maybe call this in "sendMessage" instead of babel.timer...
     private synchronized void reconnect() {
         reconnectAttempts++;
         if (channel != null && channel.isOpen())
@@ -145,7 +145,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
             @Override
             public void run() {
                 if (status.get() == Status.DISCONNECTED) reconnect();
-                else throw new AssertionError("Channel not disconnected in timer: " + peerHost);
+                else throw new AssertionError("Channel not disconnected in babel.timer: " + peerHost);
             }
         }, reconnectAttempts > config.RECONNECT_ATTEMPTS_BEFORE_DOWN ?
                                         config.RECONNECT_INTERVAL_AFTER_DOWN_MILLIS :
