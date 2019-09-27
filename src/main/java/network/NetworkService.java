@@ -11,7 +11,7 @@ import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.AttributeKey;
 import network.messaging.NetworkMessage;
 import network.messaging.control.ControlMessage;
-import network.pipeline.InEventExceptionHandler;
+import network.pipeline.InExceptionHandler;
 import network.pipeline.InHandshakeHandler;
 import network.pipeline.MessageDecoder;
 import network.pipeline.MessageEncoder;
@@ -77,20 +77,22 @@ public class NetworkService implements INetwork {
     }
 
     @Override
-    public void addPeer(Host peerHost) {
-        knownPeers.computeIfAbsent(peerHost, k ->
-                new PeerOutConnection(k, myHost, clientBootstrap, nodeListeners, serializers, config));
+    public void addPeer(Host peer, INodeListener ref) {
+        synchronized (knownPeers) {
+            PeerOutConnection conn = knownPeers.computeIfAbsent(peer, k ->
+                    new PeerOutConnection(k, myHost, clientBootstrap, nodeListeners, serializers, config));
+            conn.addReference(ref);
+        }
+
         //TODO return connection future/callback?
     }
 
     @Override
-    public void removePeer(Host peerHost) {
+    public void removePeer(Host peerHost, INodeListener ref) {
         logger.info("Removing peer: " + peerHost);
         PeerOutConnection conn = knownPeers.get(peerHost);
-        if (conn != null) {
-            conn.terminate();
-            knownPeers.remove(peerHost);
-        }
+        if (conn != null)
+            conn.removeReference(ref);
         //TODO return connection future/callback?
     }
 
@@ -102,7 +104,6 @@ public class NetworkService implements INetwork {
 
     @Override
     public void sendMessage(short msgCode, Object payload, Host to, boolean newChannel) {
-
         logger.debug((newChannel ? "Transient " : " ") + "To " + to + ": " + payload.toString());
 
         if (to.equals(myHost)) {
@@ -110,12 +111,8 @@ public class NetworkService implements INetwork {
             return;
         }
 
-        PeerOutConnection connection = knownPeers.get(to);
-        if (connection == null) {
-            logger.error("Sending message to unknown peer... forgot to use addPeer? " + payload + " " + to);
-            return;
-        }
-
+        PeerOutConnection connection = knownPeers.computeIfAbsent(to, k ->
+                new PeerOutConnection(k, myHost, clientBootstrap, nodeListeners, serializers, config));
         NetworkMessage networkMessage = new NetworkMessage(msgCode, payload);
         if (newChannel)
             connection.sendMessageTransientChannel(networkMessage);
@@ -154,7 +151,7 @@ public class NetworkService implements INetwork {
                 ch.pipeline().addLast("MessageDecoder", new MessageDecoder(serializers));
                 ch.pipeline().addLast("MessageEncoder", new MessageEncoder(serializers));
                 ch.pipeline().addLast("InHandshakeHandler", new InHandshakeHandler(messageConsumers));
-                ch.pipeline().addLast("InEventExceptionHandler", new InEventExceptionHandler());
+                ch.pipeline().addLast("InEventExceptionHandler", new InExceptionHandler());
             }
         });
         //TODO: study options / child options

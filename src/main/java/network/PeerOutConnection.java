@@ -10,7 +10,7 @@ import io.netty.util.concurrent.GenericFutureListener;
 import network.messaging.NetworkMessage;
 import network.pipeline.MessageDecoder;
 import network.pipeline.MessageEncoder;
-import network.pipeline.OutEventExceptionHandler;
+import network.pipeline.OutExceptionHandler;
 import network.pipeline.OutHandshakeHandler;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -20,10 +20,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class PeerOutConnection extends ChannelInitializer<SocketChannel> implements GenericFutureListener<ChannelFuture> {
 
     private static final Logger logger = LogManager.getLogger(PeerOutConnection.class);
+
+    private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
 
     private AtomicReference<Status> status;
     private Channel channel;
@@ -31,18 +34,22 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     private Host myHost;
     private Bootstrap clientBootstrap;
     private Timer reconnectTimer;
-    private Set<INodeListener> nodeListeners;
     private final Queue<NetworkMessage> backlog;
     private int reconnectAttempts;
 
+    private Set<INodeListener> references;
     private Map<Channel, NetworkMessage> transientChannels;
 
     private Map<Short, ISerializer> serializers;
+    private Set<INodeListener> nodeListeners;
+
     private NetworkConfiguration config;
 
-    enum Status {DISCONNECTED, ACTIVE, HANDSHAKING, TERMINATED}
+    enum Status {DISCONNECTED, ACTIVE, HANDSHAKING, RETYING}
 
     private boolean outsideNodeUp;
+
+    //TODO REFACTOR EVERYTHING
 
     PeerOutConnection(Host peerHost, Host myHost, Bootstrap bootstrap, Set<INodeListener> nodeListeners,
                       Map<Short, ISerializer> serializers, NetworkConfiguration config) {
@@ -63,8 +70,28 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
 
         this.backlog = new ConcurrentLinkedQueue<>();
 
+        this.references = new HashSet<>();
+
         this.reconnectTimer = new Timer();
-        reconnect();
+    }
+
+    void addReference(INodeListener ref) {
+        rwl.writeLock().lock();
+        references.add(ref);
+        if (status.compareAndSet(Status.DISCONNECTED, Status.RETYING))
+            reconnect();
+        rwl.writeLock().unlock();
+    }
+
+    void removeReference(INodeListener ref) {
+        rwl.writeLock().lock();
+        references.remove(ref);
+        if(references.size() == 0){
+            status.set(Status.DISCONNECTED);
+            reconnectTimer.cancel();
+            channel.close();
+        }
+        rwl.writeLock().unlock();
     }
 
     void sendMessageTransientChannel(NetworkMessage msg) {
@@ -73,32 +100,26 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
         transientChannel.closeFuture().addListener(this);
     }
 
+    //Concurrent
     void sendMessage(NetworkMessage msg) {
-        if (status.get() == Status.ACTIVE) {
+        //TODO add to eventloop
+        rwl.readLock().lock();
+        Status s = status.get();
+        if (s == Status.DISCONNECTED)
+            logger.error("Sending message to closed connection. Forgot to use addPeer? " + msg + " " + peerHost);
+        else if (s == Status.ACTIVE)
             channel.writeAndFlush(msg);
             //TODO return channelFuture?
-        } else if (status.get() == Status.TERMINATED) {
-            logger.error("Attempting to send message to terminated channel: " + peerHost);
-        } else {
-            //Disconnected or handshaking
-            logger.debug("Message to backlog..." + msg);
+        else if (s == Status.HANDSHAKING || s == Status.RETYING)
             backlog.add(msg);
-            //If status changed to active between "else" and "backlog.add" TODO: is this even possible?
-            if (status.get() == Status.ACTIVE)
-                writeBacklog();
-        }
+        rwl.readLock().unlock();
     }
 
     private void writeBacklog() {
         int count = 0;
-        while (true) {
-            if (!channel.isActive()) {
-                logger.warn("Channel no longer active in writeBacklog");
-                break;
-            }
+        while (channel.isActive()) {
             NetworkMessage msg = backlog.poll();
             if (msg == null) break;
-            logger.debug("Writing backlog msg: " + msg + " " + backlog.size());
             channel.writeAndFlush(msg);
             count++;
         }
@@ -106,8 +127,9 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
             channel.flush();
     }
 
-    //TODO maybe call this in "sendMessage" instead of babel.timer...
     private synchronized void reconnect() {
+        //TODO schedule event loop
+        logger.info("reconnect");
         reconnectAttempts++;
         if (channel != null && channel.isOpen())
             throw new AssertionError("Channel open in reconnect: " + peerHost);
@@ -115,69 +137,32 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
         channel.closeFuture().addListener(this);
     }
 
-    //Channel Close
-    @Override
-    public void operationComplete(ChannelFuture future) {
-        if(future.channel().attr(NetworkService.TRANSIENT_KEY).get())
+    public void channelActiveCallback(Channel c) {
+        if (c.attr(NetworkService.TRANSIENT_KEY).get() != null)
             return;
-
-        if (future != channel.closeFuture())
-            throw new AssertionError("Future called for not current channel: " + peerHost);
-        if (status.get() == Status.TERMINATED) return;
-
-
-        channel = null;
-        status.set(Status.DISCONNECTED);
-
-        if (reconnectAttempts == config.RECONNECT_ATTEMPTS_BEFORE_DOWN && outsideNodeUp) {
-            nodeListeners.forEach(n -> n.nodeDown(peerHost));
-            outsideNodeUp = false;
-        }
-
-        Status andSet = status.getAndSet(Status.DISCONNECTED);
-
-        if (andSet == Status.TERMINATED) {
-            status.set(Status.TERMINATED);
-            return;
-        }
-
-        reconnectTimer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                if (status.get() == Status.DISCONNECTED) reconnect();
-                else throw new AssertionError("Channel not disconnected in babel.timer: " + peerHost);
-            }
-        }, reconnectAttempts > config.RECONNECT_ATTEMPTS_BEFORE_DOWN ?
-                                        config.RECONNECT_INTERVAL_AFTER_DOWN_MILLIS :
-                                        config.RECONNECT_INTERVAL_BEFORE_DOWN_MILLIS);
-    }
-
-    @Override
-    protected void initChannel(SocketChannel ch) {
-        ch.pipeline().addLast("ReadTimeoutHandler",
-                              new ReadTimeoutHandler(config.IDLE_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
-        ch.pipeline().addLast("MessageDecoder", new MessageDecoder(serializers));
-        ch.pipeline().addLast("MessageEncoder", new MessageEncoder(serializers));
-        ch.pipeline().addLast("OutHandshakeHandler", new OutHandshakeHandler(myHost, this));
-        ch.pipeline().addLast("OutEventExceptionHandler", new OutEventExceptionHandler());
+        if (status.get() != Status.DISCONNECTED || c != channel)
+            throw new AssertionError("Channel active without being in disconnected state: " + peerHost);
+        status.set(Status.HANDSHAKING);
     }
 
     public void handshakeCompletedCallback(Channel c) {
 
-        NetworkMessage networkMessage = transientChannels.get(c);
-        if(networkMessage != null){
+        //TODO is this inside event loop?
+
+        NetworkMessage networkMessage = transientChannels.remove(c);
+        if (networkMessage != null) {
             c.writeAndFlush(networkMessage);
             return;
         }
 
+        rwl.writeLock().lock();
+
         if (status.get() != Status.HANDSHAKING || c != channel)
             throw new AssertionError("Handshake completed without being in handshake state: " + peerHost);
 
-        //TODO should setStatus and writeBacklog be before notifying paxos of nodeUp?
-        writeBacklog();
         logger.debug("Handshake completed to: " + c.remoteAddress());
-        status.set(Status.ACTIVE);
         writeBacklog();
+        status.set(Status.ACTIVE);
 
         if (!outsideNodeUp) {
             outsideNodeUp = true;
@@ -187,32 +172,57 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
             nodeListeners.forEach(l -> l.nodeConnectionReestablished(peerHost));
         }
         reconnectAttempts = 0;
+
+        rwl.writeLock().unlock();
     }
 
-    public void channelActiveCallback(Channel c) {
-        if(c.attr(NetworkService.TRANSIENT_KEY).get())
+    //Channel Close
+    @Override
+    public void operationComplete(ChannelFuture future) {
+
+        //TODO is this inside event loop?
+
+        if (future.channel().attr(NetworkService.TRANSIENT_KEY).get())
             return;
+        if (future != channel.closeFuture())
+            throw new AssertionError("Future called for not current channel: " + peerHost);
+        if (status.get() == Status.DISCONNECTED) return;
 
-        if (status.get() != Status.DISCONNECTED || c != channel)
-            throw new AssertionError("Channel active without being in disconnected state: " + peerHost);
-        status.set(Status.HANDSHAKING);
-    }
-
-    void terminate() {
-        status.set(Status.TERMINATED);
-        reconnectTimer.cancel();
-        if (channel != null) {
-            channel.closeFuture().removeListener(this);
-            channel.close();
+        if (reconnectAttempts == config.RECONNECT_ATTEMPTS_BEFORE_DOWN && outsideNodeUp) {
+            nodeListeners.forEach(n -> n.nodeDown(peerHost));
+            outsideNodeUp = false;
         }
 
-        for (Iterator<Channel> it = transientChannels.keySet().iterator(); it.hasNext(); ) {
-            it.next().close();
-            it.remove();
+        Status andSet = status.getAndSet(Status.RETYING);
+        if (andSet == Status.DISCONNECTED) {
+            status.set(Status.DISCONNECTED);
+            return;
         }
+
+        //TODO change this to eventloop schedule
+        reconnectTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                if (status.get() == Status.RETYING) reconnect();
+                else throw new AssertionError("Channel not disconnected in babel.timer: " + peerHost);
+            }
+        }, reconnectAttempts > config.RECONNECT_ATTEMPTS_BEFORE_DOWN ?
+                                        config.RECONNECT_INTERVAL_AFTER_DOWN_MILLIS :
+                                        config.RECONNECT_INTERVAL_BEFORE_DOWN_MILLIS);
     }
 
     Status getStatus() {
         return status.get();
     }
+
+    @Override
+    protected void initChannel(SocketChannel ch) {
+        ch.pipeline().addLast("ReadTimeoutHandler",
+                              new ReadTimeoutHandler(config.IDLE_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
+        ch.pipeline().addLast("MessageDecoder", new MessageDecoder(serializers));
+        ch.pipeline().addLast("MessageEncoder", new MessageEncoder(serializers));
+        ch.pipeline().addLast("OutHandshakeHandler", new OutHandshakeHandler(myHost, this));
+        ch.pipeline().addLast("OutEventExceptionHandler", new OutExceptionHandler());
+    }
+
 }

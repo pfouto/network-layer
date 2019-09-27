@@ -7,9 +7,9 @@ import io.netty.channel.ChannelPromise;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class OutEventExceptionHandler extends ChannelDuplexHandler {
+public class OutExceptionHandler extends ChannelDuplexHandler {
 
-    private static final Logger logger = LogManager.getLogger(OutEventExceptionHandler.class);
+    private static final Logger logger = LogManager.getLogger(OutExceptionHandler.class);
 
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {

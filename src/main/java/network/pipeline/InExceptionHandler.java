@@ -12,9 +12,9 @@ import network.messaging.control.HeartbeatMessage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class InEventExceptionHandler extends ChannelDuplexHandler {
+public class InExceptionHandler extends ChannelDuplexHandler {
 
-    private static final Logger logger = LogManager.getLogger(InEventExceptionHandler.class);
+    private static final Logger logger = LogManager.getLogger(InExceptionHandler.class);
 
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
