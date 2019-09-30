@@ -23,14 +23,14 @@ public interface INetwork {
      *
      * @param peerHost The peer to create a connection to.
      */
-    void addPeer(Host peerHost, INodeListener ref);
+    void addPeer(Host peerHost);
 
     /**
      * Removes the peer from the network layer, which closes any open connections.
      *
      * @param peerHost The peer to remove from the network layer
      */
-    void removePeer(Host peerHost, INodeListener ref);
+    void removePeer(Host peerHost);
 
     /**
      * Checks if the is an open connection to a peer

@@ -41,6 +41,8 @@ public class NetworkService implements INetwork {
     private Map<Short, ISerializer> serializers = new ConcurrentHashMap<>();
     private Map<Short, IMessageConsumer> messageConsumers = new ConcurrentHashMap<>();
 
+    private EventLoopGroup workerGroup;
+
     private NetworkConfiguration config;
 
     public NetworkService(Properties props) throws Exception {
@@ -51,7 +53,6 @@ public class NetworkService implements INetwork {
         serializers.put(ControlMessage.MSG_CODE, ControlMessage.serializer);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> logger.debug("Killed")));
-
     }
 
     @Override
@@ -77,22 +78,20 @@ public class NetworkService implements INetwork {
     }
 
     @Override
-    public void addPeer(Host peer, INodeListener ref) {
-        synchronized (knownPeers) {
-            PeerOutConnection conn = knownPeers.computeIfAbsent(peer, k ->
-                    new PeerOutConnection(k, myHost, clientBootstrap, nodeListeners, serializers, config));
-            conn.addReference(ref);
-        }
-
+    public void addPeer(Host peer) {
+        PeerOutConnection conn = knownPeers.computeIfAbsent(peer, k ->
+                new PeerOutConnection(k, myHost, clientBootstrap, nodeListeners, serializers, config,
+                                      workerGroup.next()));
+        conn.connect();
         //TODO return connection future/callback?
     }
 
     @Override
-    public void removePeer(Host peerHost, INodeListener ref) {
+    public void removePeer(Host peerHost) {
         logger.info("Removing peer: " + peerHost);
         PeerOutConnection conn = knownPeers.get(peerHost);
         if (conn != null)
-            conn.removeReference(ref);
+            conn.disconnect();
         //TODO return connection future/callback?
     }
 
@@ -112,7 +111,8 @@ public class NetworkService implements INetwork {
         }
 
         PeerOutConnection connection = knownPeers.computeIfAbsent(to, k ->
-                new PeerOutConnection(k, myHost, clientBootstrap, nodeListeners, serializers, config));
+                new PeerOutConnection(k, myHost, clientBootstrap, nodeListeners, serializers, config,
+                                      workerGroup.next()));
         NetworkMessage networkMessage = new NetworkMessage(msgCode, payload);
         if (newChannel)
             connection.sendMessageTransientChannel(networkMessage);
@@ -171,9 +171,8 @@ public class NetworkService implements INetwork {
 
     private Bootstrap setupClientBootstrap() {
         //TODO change group options
-        EventLoopGroup workerGroup = new NioEventLoopGroup();
+        workerGroup = new NioEventLoopGroup();
         Bootstrap newClientBootstrap = new Bootstrap();
-        newClientBootstrap.group(workerGroup);
         newClientBootstrap.channel(NioSocketChannel.class);
         //TODO: study options
         newClientBootstrap.option(ChannelOption.SO_KEEPALIVE, true);

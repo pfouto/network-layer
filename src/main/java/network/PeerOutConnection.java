@@ -4,6 +4,7 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.EventLoop;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.util.concurrent.GenericFutureListener;
@@ -15,29 +16,27 @@ import network.pipeline.OutHandshakeHandler;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.*;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class PeerOutConnection extends ChannelInitializer<SocketChannel> implements GenericFutureListener<ChannelFuture> {
 
     private static final Logger logger = LogManager.getLogger(PeerOutConnection.class);
 
-    private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
+    private EventLoop loop;
+    private volatile Status status; // Only change in event loop!
+    private int reconnectAttempts;  // Only change in event loop!
+    private boolean outsideNodeUp;  // Only change in event loop!
+    private Channel channel;        // Only change in event loop!
 
-    private AtomicReference<Status> status;
-    private Channel channel;
-    private Host peerHost;
-    private Host myHost;
-    private Bootstrap clientBootstrap;
-    private Timer reconnectTimer;
-    private final Queue<NetworkMessage> backlog;
-    private int reconnectAttempts;
+    private final Host peerHost, myHost;
+    private final Queue<NetworkMessage> messageLog; //Concurrent
+    private final Bootstrap clientBootstrap;
 
-    private Set<INodeListener> references;
     private Map<Channel, NetworkMessage> transientChannels;
 
     private Map<Short, ISerializer> serializers;
@@ -45,91 +44,47 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
 
     private NetworkConfiguration config;
 
-    enum Status {DISCONNECTED, ACTIVE, HANDSHAKING, RETYING}
+    enum Status {DISCONNECTED, ACTIVE, HANDSHAKING, RETRYING}
 
-    private boolean outsideNodeUp;
-
-    //TODO REFACTOR EVERYTHING
 
     PeerOutConnection(Host peerHost, Host myHost, Bootstrap bootstrap, Set<INodeListener> nodeListeners,
-                      Map<Short, ISerializer> serializers, NetworkConfiguration config) {
+                      Map<Short, ISerializer> serializers, NetworkConfiguration config, EventLoop loop) {
         this.peerHost = peerHost;
         this.myHost = myHost;
         this.nodeListeners = nodeListeners;
         this.serializers = serializers;
         this.config = config;
+        this.loop = loop;
 
-        this.status = new AtomicReference<>(Status.DISCONNECTED);
+        this.status = Status.DISCONNECTED;
         this.channel = null;
         this.transientChannels = new ConcurrentHashMap<>();
         this.reconnectAttempts = 0;
         this.clientBootstrap = bootstrap.clone();
         this.clientBootstrap.remoteAddress(peerHost.getAddress(), peerHost.getPort());
         this.clientBootstrap.handler(this);
+        this.clientBootstrap.group(loop);
         this.outsideNodeUp = false;
 
-        this.backlog = new ConcurrentLinkedQueue<>();
-
-        this.references = new HashSet<>();
-
-        this.reconnectTimer = new Timer();
+        this.messageLog = new ConcurrentLinkedQueue<>();
     }
 
-    void addReference(INodeListener ref) {
-        rwl.writeLock().lock();
-        references.add(ref);
-        if (status.compareAndSet(Status.DISCONNECTED, Status.RETYING))
-            reconnect();
-        rwl.writeLock().unlock();
+    //Concurrent - Adds event to loop
+    void connect() {
+        loop.execute(() -> {
+            if (status == Status.DISCONNECTED) {
+                status = Status.RETRYING;
+                reconnect();
+            }
+        });
     }
 
-    void removeReference(INodeListener ref) {
-        rwl.writeLock().lock();
-        references.remove(ref);
-        if(references.size() == 0){
-            status.set(Status.DISCONNECTED);
-            reconnectTimer.cancel();
-            channel.close();
-        }
-        rwl.writeLock().unlock();
-    }
-
-    void sendMessageTransientChannel(NetworkMessage msg) {
-        Channel transientChannel = clientBootstrap.attr(NetworkService.TRANSIENT_KEY, true).connect().channel();
-        transientChannels.put(transientChannel, msg);
-        transientChannel.closeFuture().addListener(this);
-    }
-
-    //Concurrent
-    void sendMessage(NetworkMessage msg) {
-        //TODO add to eventloop
-        rwl.readLock().lock();
-        Status s = status.get();
-        if (s == Status.DISCONNECTED)
-            logger.error("Sending message to closed connection. Forgot to use addPeer? " + msg + " " + peerHost);
-        else if (s == Status.ACTIVE)
-            channel.writeAndFlush(msg);
-            //TODO return channelFuture?
-        else if (s == Status.HANDSHAKING || s == Status.RETYING)
-            backlog.add(msg);
-        rwl.readLock().unlock();
-    }
-
-    private void writeBacklog() {
-        int count = 0;
-        while (channel.isActive()) {
-            NetworkMessage msg = backlog.poll();
-            if (msg == null) break;
-            channel.writeAndFlush(msg);
-            count++;
-        }
-        if (count > 0)
-            channel.flush();
-    }
-
-    private synchronized void reconnect() {
-        //TODO schedule event loop
-        logger.info("reconnect");
+    //Call from event loop only!
+    private void reconnect() {
+        if(status == Status.DISCONNECTED)
+            return;
+        assert loop.inEventLoop();
+        assert status == Status.RETRYING;
         reconnectAttempts++;
         if (channel != null && channel.isOpen())
             throw new AssertionError("Channel open in reconnect: " + peerHost);
@@ -137,32 +92,30 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
         channel.closeFuture().addListener(this);
     }
 
+    // inEventLoop!
     public void channelActiveCallback(Channel c) {
-        if (c.attr(NetworkService.TRANSIENT_KEY).get() != null)
-            return;
-        if (status.get() != Status.DISCONNECTED || c != channel)
+        assert loop.inEventLoop();
+        if (c.attr(NetworkService.TRANSIENT_KEY).get())
+            return; //Ignore transient channel TODO could just not add listener
+        if (status != Status.RETRYING || c != channel)
             throw new AssertionError("Channel active without being in disconnected state: " + peerHost);
-        status.set(Status.HANDSHAKING);
+        status = Status.HANDSHAKING;
     }
 
+    // inEventLoop!
     public void handshakeCompletedCallback(Channel c) {
-
-        //TODO is this inside event loop?
-
+        assert loop.inEventLoop();
         NetworkMessage networkMessage = transientChannels.remove(c);
         if (networkMessage != null) {
             c.writeAndFlush(networkMessage);
             return;
         }
-
-        rwl.writeLock().lock();
-
-        if (status.get() != Status.HANDSHAKING || c != channel)
+        if (status != Status.HANDSHAKING || c != channel)
             throw new AssertionError("Handshake completed without being in handshake state: " + peerHost);
+        status = Status.ACTIVE;
 
         logger.debug("Handshake completed to: " + c.remoteAddress());
-        writeBacklog();
-        status.set(Status.ACTIVE);
+        writeMessageLog();
 
         if (!outsideNodeUp) {
             outsideNodeUp = true;
@@ -172,47 +125,67 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
             nodeListeners.forEach(l -> l.nodeConnectionReestablished(peerHost));
         }
         reconnectAttempts = 0;
-
-        rwl.writeLock().unlock();
     }
 
-    //Channel Close
+    // Call from event loop only!
+    private void writeMessageLog() {
+        assert loop.inEventLoop();
+        if (status == Status.DISCONNECTED)
+            logger.error("Writing message to disconnected channel. Forgot to use addPeer? " + peerHost);
+
+        int count = 0;
+        NetworkMessage msg;
+        while (channel.isActive() && (msg = messageLog.poll()) != null) {
+            channel.write(msg);
+            count++;
+        }
+        if (count > 0)
+            channel.flush();
+    }
+
+
+    //Channel Close - inEventLoop!
     @Override
     public void operationComplete(ChannelFuture future) {
-
-        //TODO is this inside event loop?
-
-        if (future.channel().attr(NetworkService.TRANSIENT_KEY).get())
-            return;
+        assert loop.inEventLoop();
         if (future != channel.closeFuture())
             throw new AssertionError("Future called for not current channel: " + peerHost);
-        if (status.get() == Status.DISCONNECTED) return;
+        if (status == Status.DISCONNECTED) return;
 
         if (reconnectAttempts == config.RECONNECT_ATTEMPTS_BEFORE_DOWN && outsideNodeUp) {
             nodeListeners.forEach(n -> n.nodeDown(peerHost));
             outsideNodeUp = false;
         }
 
-        Status andSet = status.getAndSet(Status.RETYING);
-        if (andSet == Status.DISCONNECTED) {
-            status.set(Status.DISCONNECTED);
-            return;
-        }
+        assert status == Status.RETRYING || status == Status.ACTIVE;
 
-        //TODO change this to eventloop schedule
-        reconnectTimer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                if (status.get() == Status.RETYING) reconnect();
-                else throw new AssertionError("Channel not disconnected in babel.timer: " + peerHost);
-            }
-        }, reconnectAttempts > config.RECONNECT_ATTEMPTS_BEFORE_DOWN ?
-                                        config.RECONNECT_INTERVAL_AFTER_DOWN_MILLIS :
-                                        config.RECONNECT_INTERVAL_BEFORE_DOWN_MILLIS);
+        status = Status.RETRYING;
+        loop.schedule(this::reconnect, reconnectAttempts > config.RECONNECT_ATTEMPTS_BEFORE_DOWN ?
+                config.RECONNECT_INTERVAL_AFTER_DOWN_MILLIS :
+                config.RECONNECT_INTERVAL_BEFORE_DOWN_MILLIS, TimeUnit.MILLISECONDS);
+    }
+
+    //Concurrent - Adds event to loop
+    void disconnect() {
+        loop.execute(() -> {
+            status = Status.DISCONNECTED;
+            channel.close();
+        });
+    }
+
+    //Concurrent - Adds event to loop
+    void sendMessage(NetworkMessage msg) {
+        messageLog.add(msg);
+        loop.execute(this::writeMessageLog);
+    }
+
+    void sendMessageTransientChannel(NetworkMessage msg) {
+        Channel transientChannel = clientBootstrap.attr(NetworkService.TRANSIENT_KEY, true).connect().channel();
+        transientChannels.put(transientChannel, msg);
     }
 
     Status getStatus() {
-        return status.get();
+        return status;
     }
 
     @Override
