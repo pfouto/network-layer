@@ -31,7 +31,7 @@ public class OutHandshakeHandler extends ChannelDuplexHandler
 
         ChannelFuture channelFuture = ctx.channel().writeAndFlush(new NetworkMessage(ControlMessage.MSG_CODE, new FirstHandshakeMessage(myHost)));
         channelFuture.addListener(listener -> {
-            logger.debug("Handshake completed to " + ctx.channel().remoteAddress().toString());
+            //logger.debug("Handshake completed to " + ctx.channel().remoteAddress().toString());
             ctx.channel().pipeline().replace(this, "OutConnectionHandler", new OutConnectionHandler(ctx));
             peerOutConnection.handshakeCompletedCallback(ctx.channel());
         });

@@ -103,7 +103,7 @@ public class NetworkService implements INetwork {
 
     @Override
     public void sendMessage(short msgCode, Object payload, Host to, boolean newChannel) {
-        logger.debug((newChannel ? "Transient " : " ") + "To " + to + ": " + payload.toString());
+        //logger.debug((newChannel ? "Transient " : " ") + "To " + to + ": " + payload.toString());
 
         if (to.equals(myHost)) {
             messageConsumers.get(msgCode).deliverMessage(msgCode, payload, myHost);

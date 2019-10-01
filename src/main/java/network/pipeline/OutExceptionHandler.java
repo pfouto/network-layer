@@ -40,7 +40,7 @@ public class OutExceptionHandler extends ChannelDuplexHandler {
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
-        logger.debug("Out to " + ctx.channel().remoteAddress() + " closed");
+        //logger.debug("Out to " + ctx.channel().remoteAddress() + " closed");
         ctx.fireChannelInactive();
     }
 }

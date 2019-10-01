@@ -73,6 +73,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     void connect() {
         loop.execute(() -> {
             if (status == Status.DISCONNECTED) {
+                logger.debug("Disconnecting from " + peerHost);
                 status = Status.RETRYING;
                 reconnect();
             }
@@ -81,7 +82,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
 
     //Call from event loop only!
     private void reconnect() {
-        if(status == Status.DISCONNECTED)
+        if (status == Status.DISCONNECTED)
             return;
         assert loop.inEventLoop();
         assert status == Status.RETRYING;
@@ -105,11 +106,13 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     // inEventLoop!
     public void handshakeCompletedCallback(Channel c) {
         assert loop.inEventLoop();
-        NetworkMessage networkMessage = transientChannels.remove(c);
-        if (networkMessage != null) {
+        if (c.attr(NetworkService.TRANSIENT_KEY).get()) {
+            NetworkMessage networkMessage = transientChannels.remove(c);
+            assert networkMessage != null;
             c.writeAndFlush(networkMessage);
             return;
         }
+
         if (status != Status.HANDSHAKING || c != channel)
             throw new AssertionError("Handshake completed without being in handshake state: " + peerHost);
         status = Status.ACTIVE;
@@ -131,7 +134,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     private void writeMessageLog() {
         assert loop.inEventLoop();
         if (status == Status.DISCONNECTED)
-            logger.error("Writing message to disconnected channel. Forgot to use addPeer? " + peerHost);
+            logger.error("Writing message " + messageLog.poll() + " to disconnected channel " + peerHost);
 
         int count = 0;
         NetworkMessage msg;
@@ -168,20 +171,26 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     //Concurrent - Adds event to loop
     void disconnect() {
         loop.execute(() -> {
-            status = Status.DISCONNECTED;
-            channel.close();
+            if (status != Status.DISCONNECTED) {
+                status = Status.DISCONNECTED;
+                channel.close();
+            }
         });
     }
 
     //Concurrent - Adds event to loop
     void sendMessage(NetworkMessage msg) {
+        //TODO should we skip messageLog and just send it here? (inside the loop)
         messageLog.add(msg);
         loop.execute(this::writeMessageLog);
     }
 
+    //Concurrent - Adds event to loop
     void sendMessageTransientChannel(NetworkMessage msg) {
-        Channel transientChannel = clientBootstrap.attr(NetworkService.TRANSIENT_KEY, true).connect().channel();
-        transientChannels.put(transientChannel, msg);
+        loop.execute(() -> {
+            Channel transientChannel = clientBootstrap.attr(NetworkService.TRANSIENT_KEY, true).connect().channel();
+            transientChannels.put(transientChannel, msg);
+        });
     }
 
     Status getStatus() {

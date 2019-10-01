@@ -29,6 +29,6 @@ public class MessageEncoder extends MessageToByteEncoder<NetworkMessage>
         out.writeShort(msg.code);
         iSerializer.serialize(msg.payload, out);
 
-        assert out.writerIndex() == iSerializer.serializedSize(msg.payload) + 1 + 4;
+        assert out.writerIndex() == iSerializer.serializedSize(msg.payload) + 2 + 4;
     }
 }
