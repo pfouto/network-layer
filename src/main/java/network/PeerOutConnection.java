@@ -174,6 +174,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     void disconnect() {
         loop.execute(() -> {
             if (status != Status.DISCONNECTED) {
+                logger.debug("Disconnecting channel to: " + peerHost);
                 status = Status.DISCONNECTED;
                 channel.close();
             }
