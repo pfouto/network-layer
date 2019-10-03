@@ -73,7 +73,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     void connect() {
         loop.execute(() -> {
             if (status == Status.DISCONNECTED) {
-                logger.debug("Disconnecting from " + peerHost);
+                logger.debug("Connecting to " + peerHost);
                 status = Status.RETRYING;
                 reconnect();
             }
@@ -133,8 +133,10 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     // Call from event loop only!
     private void writeMessageLog() {
         assert loop.inEventLoop();
-        if (status == Status.DISCONNECTED)
+        if (status == Status.DISCONNECTED) {
             logger.error("Writing message " + messageLog.poll() + " to disconnected channel " + peerHost);
+            return;
+        }
 
         int count = 0;
         NetworkMessage msg;
