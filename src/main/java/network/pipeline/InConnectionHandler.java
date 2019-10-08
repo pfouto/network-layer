@@ -38,6 +38,7 @@ public class InConnectionHandler extends ChannelDuplexHandler {
         IMessageConsumer iMessageConsumer = messageConsumers.get(netMsg.code);
         if (iMessageConsumer == null)
             throw new AssertionError("No consumer for received message: " + msg);
+        logger.debug("Delivering message: " + netMsg.code + ": " + netMsg.payload + " from " + peerHost);
         iMessageConsumer.deliverMessage(netMsg.code, netMsg.payload, peerHost);
     }
 }

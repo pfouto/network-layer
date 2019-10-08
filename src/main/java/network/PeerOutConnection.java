@@ -141,6 +141,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
         int count = 0;
         NetworkMessage msg;
         while (channel.isActive() && (msg = messageLog.poll()) != null) {
+            logger.debug("Writing " + msg + " to outChannel of " + peerHost);
             channel.write(msg);
             count++;
         }
@@ -183,6 +184,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
 
     //Concurrent - Adds event to loop
     void sendMessage(NetworkMessage msg) {
+        logger.debug("Adding " + msg + " to msgOutQueue of " + peerHost);
         //TODO should we skip messageLog and just send it here? (inside the loop)
         messageLog.add(msg);
         loop.execute(this::writeMessageLog);
