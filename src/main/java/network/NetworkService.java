@@ -89,7 +89,7 @@ public class NetworkService implements INetwork {
     @Override
     public void removePeer(Host peerHost) {
         //logger.info("Removing peer: " + peerHost);
-        PeerOutConnection conn = knownPeers.get(peerHost);
+        PeerOutConnection conn = knownPeers.remove(peerHost);
         if (conn != null)
             conn.disconnect();
         //TODO return connection future/callback?
