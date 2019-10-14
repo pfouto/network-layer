@@ -134,9 +134,10 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     private void writeMessageLog() {
         assert loop.inEventLoop();
         if (status == Status.DISCONNECTED) {
-            logger.error("Writing message " + messageLog.poll() + " to disconnected channel " + peerHost);
+            logger.error("Writing message " + messageLog.poll() + " to disconnected channel " + peerHost + ". You probably forgot to call addNetworkPeer");
             return;
         }
+        if(status != Status.ACTIVE) return;
 
         int count = 0;
         NetworkMessage msg;
