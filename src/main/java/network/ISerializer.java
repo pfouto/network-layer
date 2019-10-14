@@ -25,7 +25,7 @@ public interface ISerializer<T> {
      *
      * @param in The byte buffer which contains the object to be deserialized
      * @return The deserialized object
-     * @throws UnknownHostException
+     * @throws UnknownHostException if the message to be deserialized contains a host that cannot be deserialized. Should never be thrown (visible for testing).
      */
     T deserialize(ByteBuf in) throws UnknownHostException;
 
