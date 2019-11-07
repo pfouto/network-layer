@@ -32,9 +32,10 @@ public class InHandshakeHandler extends ChannelDuplexHandler {
         NetworkMessage netMsg = (NetworkMessage) msg;
         ControlMessage payload = (ControlMessage) netMsg.payload;
         if (payload.type == ControlMessage.Type.FIRST_HS) {
+            FirstHandshakeMessage fhm = (FirstHandshakeMessage) payload;
+            logger.debug("Incoming connection from: " + fhm.clientHost);
             ctx.pipeline().replace(this, "InConnectionHandler",
-                                   new InConnectionHandler(((FirstHandshakeMessage) payload).clientHost,
-                                                           messageConsumers));
+                                   new InConnectionHandler(fhm.clientHost, messageConsumers));
         } else {
             throw new AssertionError("Received unexpected message in handshake: " + msg);
         }

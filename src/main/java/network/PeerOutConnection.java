@@ -28,10 +28,13 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     private static final Logger logger = LogManager.getLogger(PeerOutConnection.class);
 
     private EventLoop loop;
-    private volatile Status status; // Only change in event loop!
-    private int reconnectAttempts;  // Only change in event loop!
-    private boolean outsideNodeUp;  // Only change in event loop!
-    private Channel channel;        // Only change in event loop!
+    // Only change in event loop! ----- START
+    private volatile Status status;
+    private int reconnectAttempts;
+    private boolean outsideNodeUp;
+    private Channel channel;
+    private boolean markForDisconnect;
+    // Only change in event loop! ------ END
 
     private final Host peerHost, myHost;
     private final Queue<NetworkMessage> messageLog; //Concurrent
@@ -73,6 +76,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     void connect() {
         loop.execute(() -> {
             if (status == Status.DISCONNECTED) {
+                markForDisconnect = false;
                 logger.debug("Connecting to " + peerHost);
                 status = Status.RETRYING;
                 reconnect();
@@ -109,6 +113,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
         if (c.attr(NetworkService.TRANSIENT_KEY).get()) {
             NetworkMessage networkMessage = transientChannels.remove(c);
             assert networkMessage != null;
+            logger.debug("Side channel handshake completed to " + peerHost +". Writing: " + networkMessage);
             c.writeAndFlush(networkMessage);
             return;
         }
@@ -128,13 +133,19 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
             nodeListeners.forEach(l -> l.nodeConnectionReestablished(peerHost));
         }
         reconnectAttempts = 0;
+
+        if(markForDisconnect){
+            logger.debug("Connection to " + peerHost + " was marked for disconnection, disconnecting.");
+            status = Status.DISCONNECTED;
+            channel.close();
+        }
     }
 
     // Call from event loop only!
     private void writeMessageLog() {
         assert loop.inEventLoop();
         if (status == Status.DISCONNECTED) {
-            logger.error("Writing message " + messageLog.poll() + " to disconnected channel " + peerHost + ". You probably forgot to call addNetworkPeer");
+            logger.error("Writing message " + messageLog.poll() + " to disconnected channel " + peerHost + ". Probably forgot to call addNetworkPeer");
             return;
         }
         if(status != Status.ACTIVE) return;
@@ -159,15 +170,20 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
             throw new AssertionError("Future called for not current channel: " + peerHost);
         if (status == Status.DISCONNECTED) return;
 
-        if (reconnectAttempts == config.RECONNECT_ATTEMPTS_BEFORE_DOWN && outsideNodeUp) {
-            nodeListeners.forEach(n -> n.nodeDown(peerHost));
-            outsideNodeUp = false;
+        if (reconnectAttempts == config.RECONNECT_ATTEMPTS_BEFORE_DOWN) {
+            logger.debug("Connection to " + peerHost + " failed after max " + reconnectAttempts + " retries, will continue trying...");
+            if(outsideNodeUp) {
+                nodeListeners.forEach(n -> n.nodeDown(peerHost));
+                outsideNodeUp = false;
+            }
+            if(markForDisconnect){
+                //TODO kill if marked
+                logger.debug("Connection to " + peerHost + " was marked for disconnection, disconnecting.");
+            }
         }
 
-        assert status == Status.RETRYING || status == Status.ACTIVE;
-
         status = Status.RETRYING;
-        loop.schedule(this::reconnect, reconnectAttempts > config.RECONNECT_ATTEMPTS_BEFORE_DOWN ?
+        loop.schedule(this::reconnect, reconnectAttempts >= config.RECONNECT_ATTEMPTS_BEFORE_DOWN ?
                 config.RECONNECT_INTERVAL_AFTER_DOWN_MILLIS :
                 config.RECONNECT_INTERVAL_BEFORE_DOWN_MILLIS, TimeUnit.MILLISECONDS);
     }
@@ -175,8 +191,22 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     //Concurrent - Adds event to loop
     void disconnect() {
         loop.execute(() -> {
+            if(status == Status.ACTIVE) {
+                logger.debug("Disconnecting channel to: " + peerHost + ", status was " + status);
+                status = Status.DISCONNECTED;
+                channel.close();
+            } else {
+                logger.debug("Marking channel for disconnection: " + peerHost + ", status is " + status);
+                markForDisconnect = true;
+            }
+        });
+    }
+
+    //Concurrent - Adds event to loop
+    void forceDisconnect() {
+        loop.execute(() -> {
             if (status != Status.DISCONNECTED) {
-                logger.debug("Disconnecting channel to: " + peerHost);
+                logger.debug("Force disconnecting channel to: " + peerHost + ", status was " + status);
                 status = Status.DISCONNECTED;
                 channel.close();
             }

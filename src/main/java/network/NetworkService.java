@@ -89,9 +89,18 @@ public class NetworkService implements INetwork {
     @Override
     public void removePeer(Host peerHost) {
         //logger.info("Removing peer: " + peerHost);
-        PeerOutConnection conn = knownPeers.remove(peerHost);
+        PeerOutConnection conn = knownPeers.get(peerHost);
         if (conn != null)
             conn.disconnect();
+        //TODO return connection future/callback?
+    }
+
+    @Override
+    public void forceRemovePeer(Host peerHost) {
+        //logger.info("Force removing peer: " + peerHost);
+        PeerOutConnection conn = knownPeers.get(peerHost);
+        if (conn != null)
+            conn.forceDisconnect();
         //TODO return connection future/callback?
     }
 

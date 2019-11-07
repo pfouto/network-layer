@@ -26,11 +26,19 @@ public interface INetwork {
     void addPeer(Host peerHost);
 
     /**
-     * Removes the peer from the network layer, which closes any open connections.
+     * Removes the peer from the network layer, waiting until any pending messages are sent
+     * (or the connection attempt fails) before closing.
      *
      * @param peerHost The peer to remove from the network layer
      */
     void removePeer(Host peerHost);
+
+    /**
+     * Removes the peer from the network layer, which closes any open connections.
+     *
+     * @param peerHost The peer to remove from the network layer
+     */
+    void forceRemovePeer(Host peerHost);
 
     /**
      * Checks if the is an open connection to a peer

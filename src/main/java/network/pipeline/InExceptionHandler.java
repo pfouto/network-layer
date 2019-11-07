@@ -49,7 +49,7 @@ public class InExceptionHandler extends ChannelDuplexHandler {
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
-        //logger.debug("In from " + ctx.channel().remoteAddress() + " closed");
+        logger.debug("Incoming connection from " + ctx.channel().remoteAddress() + " closed");
         ctx.fireChannelInactive();
     }
 }
