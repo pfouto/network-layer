@@ -49,7 +49,6 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
 
     enum Status {DISCONNECTED, ACTIVE, HANDSHAKING, RETRYING}
 
-
     PeerOutConnection(Host peerHost, Host myHost, Bootstrap bootstrap, Set<INodeListener> nodeListeners,
                       Map<Short, ISerializer> serializers, NetworkConfiguration config, EventLoop loop) {
         this.peerHost = peerHost;
@@ -76,9 +75,10 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     void connect() {
         loop.execute(() -> {
             if (status == Status.DISCONNECTED) {
-                markForDisconnect = false;
                 logger.debug("Connecting to " + peerHost);
                 status = Status.RETRYING;
+                outsideNodeUp = false;
+                markForDisconnect = false;
                 reconnect();
             }
         });
@@ -179,6 +179,8 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
             if(markForDisconnect){
                 //TODO kill if marked
                 logger.debug("Connection to " + peerHost + " was marked for disconnection, disconnecting.");
+                status = Status.DISCONNECTED;
+                return;
             }
         }
 
