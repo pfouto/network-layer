@@ -137,6 +137,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
         if(markForDisconnect){
             logger.debug("Connection to " + peerHost + " was marked for disconnection, disconnecting.");
             status = Status.DISCONNECTED;
+            messageLog.clear();
             channel.close();
         }
     }
@@ -180,6 +181,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
                 //TODO kill if marked
                 logger.debug("Connection to " + peerHost + " was marked for disconnection, disconnecting.");
                 status = Status.DISCONNECTED;
+                messageLog.clear();
                 return;
             }
         }
@@ -193,9 +195,12 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     //Concurrent - Adds event to loop
     void disconnect() {
         loop.execute(() -> {
-            if(status == Status.ACTIVE) {
+            //TODO probably change to "isOutsideUp"? or something...
+            //TODO probably need 2 different RETRYING (RETRYING_UP and RETRYING_DOWN)
+            if(status == Status.ACTIVE || (status == Status.RETRYING && reconnectAttempts >= config.RECONNECT_ATTEMPTS_BEFORE_DOWN)) {
                 logger.debug("Disconnecting channel to: " + peerHost + ", status was " + status);
                 status = Status.DISCONNECTED;
+                messageLog.clear();
                 channel.close();
             } else {
                 logger.debug("Marking channel for disconnection: " + peerHost + ", status is " + status);
@@ -210,6 +215,7 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
             if (status != Status.DISCONNECTED) {
                 logger.debug("Force disconnecting channel to: " + peerHost + ", status was " + status);
                 status = Status.DISCONNECTED;
+                messageLog.clear();
                 channel.close();
             }
         });
