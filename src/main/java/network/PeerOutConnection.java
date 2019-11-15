@@ -47,6 +47,8 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
 
     private NetworkConfiguration config;
 
+    private int connectionCounter;
+
     enum Status {DISCONNECTED, ACTIVE, HANDSHAKING, RETRYING}
 
     PeerOutConnection(Host peerHost, Host myHost, Bootstrap bootstrap, Set<INodeListener> nodeListeners,
@@ -68,12 +70,15 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
         this.clientBootstrap.group(loop);
         this.outsideNodeUp = false;
 
+        this.connectionCounter = 0;
+
         this.messageLog = new ConcurrentLinkedQueue<>();
     }
 
     //Concurrent - Adds event to loop
     void connect() {
         loop.execute(() -> {
+            this.connectionCounter ++;
             if (status == Status.DISCONNECTED) {
                 logger.debug("Connecting to " + peerHost);
                 status = Status.RETRYING;
@@ -195,6 +200,8 @@ public class PeerOutConnection extends ChannelInitializer<SocketChannel> impleme
     //Concurrent - Adds event to loop
     void disconnect() {
         loop.execute(() -> {
+            this.connectionCounter--;
+            if(this.connectionCounter > 0) return;
             //TODO probably change to "isOutsideUp"? or something...
             //TODO probably need 2 different RETRYING (RETRYING_UP and RETRYING_DOWN)
             if(status == Status.ACTIVE || (status == Status.RETRYING && reconnectAttempts >= config.RECONNECT_ATTEMPTS_BEFORE_DOWN)) {
