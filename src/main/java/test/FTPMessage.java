@@ -1,24 +1,22 @@
-package network.messaging.control;
+package test;
 
 import io.netty.buffer.ByteBuf;
 import network.ISerializer;
 
 import java.io.IOException;
+import java.net.UnknownHostException;
 
-public abstract class ControlMessage {
-
-    public final static int MAGIC_NUMBER = 0x79676472;
-
-    interface ControlMessageSerializer<T extends ControlMessage> extends ISerializer<T> {
+public abstract class FTPMessage {
+    interface FTPSerializer<T extends FTPMessage> extends ISerializer<T> {
     }
 
-    public enum Type {
-        HEARTBEAT(0, HeartbeatMessage.serializer),
-        FIRST_HS(1, FirstHandshakeMessage.serializer),
-        SECOND_HS(2, SecondHandshakeMessage.serializer);
+    public enum Type{
+        HELLO(0, HelloMsg.serializer),
+        PART(1, PartMsg.serializer),
+        BYE(2, ByeMsg.serializer);
 
         public final int opcode;
-        private final ControlMessageSerializer<ControlMessage> serializer;
+        private final FTPSerializer<FTPMessage> serializer;
 
         private static final Type[] opcodeIdx;
 
@@ -34,11 +32,12 @@ public abstract class ControlMessage {
             }
         }
 
-        Type(int opcode, ControlMessageSerializer<ControlMessage> serializer) {
+        Type(int opcode, FTPSerializer<FTPMessage> serializer) {
             this.opcode = opcode;
             this.serializer = serializer;
         }
 
+        @SuppressWarnings("Duplicates")
         public static Type fromOpcode(int opcode) {
             if (opcode >= opcodeIdx.length || opcode < 0)
                 throw new AssertionError(String.format("Unknown opcode %d", opcode));
@@ -47,25 +46,25 @@ public abstract class ControlMessage {
                 throw new AssertionError(String.format("Unknown opcode %d", opcode));
             return t;
         }
+
     }
 
     public final Type type;
 
-    ControlMessage(Type type) {
+    FTPMessage(Type type) {
         this.type = type;
     }
 
-    public static final ISerializer<ControlMessage> serializer = new ISerializer<ControlMessage>() {
-        @Override
-        public void serialize(ControlMessage message, ByteBuf out) throws IOException {
+    public static final ISerializer<FTPMessage> serializer = new ISerializer<FTPMessage>() {
+        public void serialize(FTPMessage message, ByteBuf out) throws IOException {
             out.writeInt(message.type.opcode);
             message.type.serializer.serialize(message, out);
         }
 
-        @Override
-        public ControlMessage deserialize(ByteBuf in) throws IOException {
-            Type type = Type.fromOpcode(in.readInt());
+        public FTPMessage deserialize(ByteBuf in) throws IOException {
+            FTPMessage.Type type = FTPMessage.Type.fromOpcode(in.readInt());
             return type.serializer.deserialize(in);
         }
     };
+
 }

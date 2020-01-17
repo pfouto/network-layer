@@ -1,6 +1,7 @@
-package network;
+package network.data;
 
 import io.netty.buffer.ByteBuf;
+import network.ISerializer;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -70,22 +71,6 @@ public class Host implements Comparable<Host> {
         return Objects.hash(port, address);
     }
 
-    public void serialize(ByteBuf out) {
-        out.writeBytes(addressBytes);
-        out.writeShort(port);
-    }
-
-    public static Host deserialize(ByteBuf in) throws UnknownHostException {
-        byte[] addrBytes = new byte[4];
-        in.readBytes(addrBytes);
-        int port = in.readShort() & 0xFFFF;
-        return new Host(InetAddress.getByAddress(addrBytes), addrBytes, port);
-    }
-
-    public int serializedSize() {
-        return 4 + 2;
-    }
-
     //Assume always a valid IPv4 address
     @Override
     public int compareTo(Host other) {
@@ -95,4 +80,21 @@ public class Host implements Comparable<Host> {
         }
         return Integer.compare(this.port, other.port);
     }
+
+    public static ISerializer<Host> serializer = new ISerializer<Host>() {
+        @Override
+        public void serialize(Host host, ByteBuf out) {
+            out.writeBytes(host.addressBytes);
+            out.writeShort(host.port);
+        }
+
+        @Override
+        public Host deserialize(ByteBuf in) throws UnknownHostException {
+            byte[] addrBytes = new byte[4];
+            in.readBytes(addrBytes);
+            int port = in.readShort() & 0xFFFF;
+            return new Host(InetAddress.getByAddress(addrBytes), addrBytes, port);
+        }
+    };
+
 }

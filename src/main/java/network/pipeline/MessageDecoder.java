@@ -5,41 +5,44 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import network.ISerializer;
 import network.messaging.NetworkMessage;
+import network.messaging.control.ControlMessage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.net.UnknownHostException;
+import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
-public class MessageDecoder extends ByteToMessageDecoder
-{
+public class MessageDecoder<T> extends ByteToMessageDecoder {
 
     private static final Logger logger = LogManager.getLogger(MessageDecoder.class);
 
-    private Map<Short, ISerializer> serializers;
+    private final ISerializer<T> serializer;
 
-    public MessageDecoder(Map<Short, ISerializer> serializers)
-    {
-        this.serializers = serializers;
+    public MessageDecoder(ISerializer<T> serializer) {
+        this.serializer = serializer;
     }
 
     @Override
-    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws UnknownHostException
-    {
-        if (in.readableBytes() < 4)
-            return;
+    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws IOException {
+        if (in.readableBytes() < Integer.BYTES)  return;
 
         int msgSize = in.getInt(in.readerIndex());
-        if (in.readableBytes() < msgSize + 4) {
+        if (in.readableBytes() < msgSize + Integer.BYTES)
             return;
-        }
+
         in.skipBytes(4);
-
-        short code = in.readShort();
-        Object payload = serializers.get(code).deserialize(in);
-        NetworkMessage networkMessage = new NetworkMessage(code, payload);
-        out.add(networkMessage);
+        byte code = in.readByte();
+        Object payload;
+        switch (code){
+            case NetworkMessage.CTRL_MSG:
+                payload = ControlMessage.serializer.deserialize(in);
+                break;
+            case NetworkMessage.APP_MSG:
+                payload = serializer.deserialize(in);
+                break;
+            default:
+                throw new AssertionError("Unknown msg code in decoder: " + code);
+        }
+        out.add(new NetworkMessage(code, payload));
     }
-
 }

@@ -14,21 +14,15 @@ public class HeartbeatMessage extends ControlMessage
         return type.toString();
     }
 
-    @SuppressWarnings("Duplicates")
     public static ControlMessageSerializer serializer = new ControlMessageSerializer<HeartbeatMessage>()
     {
-        public void serialize(HeartbeatMessage msg, ByteBuf out)
-        {
-        }
+        @Override
+        public void serialize(HeartbeatMessage msg, ByteBuf out) { }
 
+        @Override
         public HeartbeatMessage deserialize(ByteBuf in)
         {
             return new HeartbeatMessage();
-        }
-
-        public int serializedSize(HeartbeatMessage msg)
-        {
-            return 0;
         }
     };
 }

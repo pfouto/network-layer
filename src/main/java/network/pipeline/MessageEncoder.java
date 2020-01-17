@@ -5,37 +5,45 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
 import network.ISerializer;
 import network.messaging.NetworkMessage;
+import network.messaging.control.ControlMessage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.Map;
+import java.io.IOException;
 
-public class MessageEncoder extends MessageToByteEncoder<NetworkMessage> {
+public class MessageEncoder<T> extends MessageToByteEncoder<NetworkMessage> {
+
     private static final Logger logger = LogManager.getLogger(MessageEncoder.class);
 
-    private Map<Short, ISerializer> serializers;
+    private ISerializer<T> serializer;
 
-    public MessageEncoder(Map<Short, ISerializer> serializers) {
-        this.serializers = serializers;
+    public MessageEncoder(ISerializer<T> serializer) {
+        this.serializer = serializer;
     }
 
     @Override
-    protected void encode(ChannelHandlerContext ctx, NetworkMessage msg, ByteBuf out) {
-        int initialIndex = out.writerIndex();
+    protected void encode(ChannelHandlerContext ctx, NetworkMessage msg, ByteBuf out) throws IOException {
 
-        ISerializer iSerializer = serializers.get(msg.code);
-        int serializedSize = iSerializer.serializedSize(msg.payload);
-        out.writeInt(serializedSize + 2);
-        out.writeShort(msg.code);
-        iSerializer.serialize(msg.payload, out);
+        int sizeIndex = out.writerIndex();
+        out.writeInt(-1);
 
-        int writtenBytes = out.writerIndex() - initialIndex;
-
-        if (writtenBytes != (serializedSize + 2 + 4)) {
-            throw new RuntimeException(
-                    "Size of message " + msg.getClass() + "( " + msg + " ) is incorrect. Reported value is " + serializedSize + " but internal buffer has " + (writtenBytes - 2 - 4));
+        int startIndex = out.writerIndex();
+        out.writeByte(msg.code);
+        switch (msg.code){
+            case NetworkMessage.CTRL_MSG:
+                ControlMessage.serializer.serialize((ControlMessage) msg.payload,out);
+                break;
+            case NetworkMessage.APP_MSG:
+                serializer.serialize((T) msg.payload, out);
+                break;
+            default:
+                throw new AssertionError("Unknown msg code in encoder: " + msg);
         }
 
-        assert out.writerIndex() == iSerializer.serializedSize(msg.payload) + 2 + 4;
+        int serializedSize = out.writerIndex() - startIndex;
+        out.markWriterIndex();
+        out.writerIndex(sizeIndex);
+        out.writeInt(serializedSize);
+        out.resetWriterIndex();
     }
 }

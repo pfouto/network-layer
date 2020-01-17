@@ -1,36 +1,51 @@
 package network.messaging.control;
 
 import io.netty.buffer.ByteBuf;
-import network.Host;
+import io.netty.buffer.ByteBufUtil;
+import network.data.Attributes;
+import org.w3c.dom.Attr;
 
-import java.net.UnknownHostException;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 public class FirstHandshakeMessage extends ControlMessage {
 
-    public final Host clientHost;
+    public final Attributes attributes;
+    public final int magicNumber;
 
-    public FirstHandshakeMessage(Host clientHost) {
+    public FirstHandshakeMessage(Attributes attributes) {
+        this(attributes, ControlMessage.MAGIC_NUMBER);
+    }
+
+    public FirstHandshakeMessage(Attributes attributes, int magicNumber) {
         super(Type.FIRST_HS);
-        this.clientHost = clientHost;
+        this.attributes = attributes;
+        this.magicNumber = magicNumber;
     }
 
     @Override
     public String toString() {
-        return type + " | " + clientHost;
+        return "FirstHandshakeMessage{" +
+                "attributes=" + attributes +
+                ", magicNumber=" + magicNumber +
+                '}';
     }
 
-    @SuppressWarnings("Duplicates")
-    public static ControlMessageSerializer serializer = new ControlMessageSerializer<FirstHandshakeMessage>() {
-        public void serialize(FirstHandshakeMessage msg, ByteBuf out) {
-            msg.clientHost.serialize(out);
+    static ControlMessageSerializer serializer = new ControlMessageSerializer<FirstHandshakeMessage>() {
+
+        public void serialize(FirstHandshakeMessage msg, ByteBuf out) throws IOException {
+            out.writeInt(msg.magicNumber);
+            Attributes.serializer.serialize(msg.attributes, out);
         }
 
-        public FirstHandshakeMessage deserialize(ByteBuf in) throws UnknownHostException {
-            return new FirstHandshakeMessage(Host.deserialize(in));
-        }
-
-        public int serializedSize(FirstHandshakeMessage msg) {
-            return msg.clientHost.serializedSize();
+        public FirstHandshakeMessage deserialize(ByteBuf in) throws IOException {
+            int magicNumber = in.readInt();
+            if(magicNumber != ControlMessage.MAGIC_NUMBER)
+                throw new RuntimeException("Invalid magic number: " + magicNumber);
+            Attributes attributes = Attributes.serializer.deserialize(in);
+            return new FirstHandshakeMessage(attributes, magicNumber);
         }
     };
 }

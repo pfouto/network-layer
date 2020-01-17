@@ -1,44 +1,85 @@
 package network.pipeline;
 
-import io.netty.channel.ChannelDuplexHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelPromise;
-import network.Host;
-import network.IMessageConsumer;
+import io.netty.channel.*;
+import network.data.Host;
+import network.listeners.MessageListener;
+import network.listeners.InConnListener;
 import network.messaging.NetworkMessage;
-import network.messaging.control.ControlMessage;
+import network.userevents.HandshakeCompleted;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.Map;
+import java.net.InetSocketAddress;
 
-public class InConnectionHandler extends ChannelDuplexHandler {
+public class InConnectionHandler<T> extends ConnectionHandler<T> {
+
     private static final Logger logger = LogManager.getLogger(InConnectionHandler.class);
 
-    private Map<Short, IMessageConsumer> messageConsumers;
-    private Host peerHost;
+    private boolean outsideUp;
+    private final InConnListener<T> listener;
 
-    InConnectionHandler(Host peerHost, Map<Short, IMessageConsumer> messageConsumers) {
-        this.peerHost = peerHost;
-        this.messageConsumers = messageConsumers;
+    public InConnectionHandler(InConnListener<T> listener, MessageListener<T> consumer, EventLoop loop) {
+        super(consumer, loop, true);
+        this.listener = listener;
+        outsideUp = false;
     }
 
     @Override
-    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
-        assert ((ControlMessage) (((NetworkMessage) msg).payload)).type == ControlMessage.Type.HEARTBEAT;
-        ctx.write(msg, promise);
+    public void channelActive(ChannelHandlerContext ctx) {
+        logger.debug("Incoming channel active: " + ctx.channel().remoteAddress());
+        this.channel = ctx.channel();
+        InetSocketAddress addr = (InetSocketAddress) ctx.channel().remoteAddress();
+        this.peer = new Host(addr.getAddress(), addr.getPort());
+    }
+
+    public void sendMessage(T msg) {
+        loop.execute(() -> {
+            channel.writeAndFlush(new NetworkMessage(NetworkMessage.APP_MSG, msg));
+        });
+    }
+
+    public void disconnect() {
+        loop.execute(() -> {
+            channel.flush();
+            channel.close();
+        });
     }
 
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        NetworkMessage netMsg = (NetworkMessage) msg;
-        if (netMsg.code == ControlMessage.MSG_CODE)
-            throw new AssertionError("Control message received in InConnectionHandler, should not happen: " + msg);
+    public void internalUserEventTriggered(ChannelHandlerContext ctx, Object evt) {
+        if (evt instanceof HandshakeCompleted) {
+            this.attributes = ((HandshakeCompleted) evt).getAttr();
+            listener.inboundConnectionUp(this);
+            outsideUp = true;
+        } else
+            logger.warn("Unknown user event caught: " + evt);
+    }
 
-        IMessageConsumer iMessageConsumer = messageConsumers.get(netMsg.code);
-        if (iMessageConsumer == null)
-            throw new AssertionError("No consumer for received message: " + msg);
-        logger.debug("Delivering message: " + netMsg.code + ": " + netMsg.payload + " from " + peerHost);
-        iMessageConsumer.deliverMessage(netMsg.code, netMsg.payload, peerHost);
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        logger.debug("In connection exception: " + ctx.channel().remoteAddress().toString() + " " + cause);
+        if (outsideUp) {
+            listener.inboundConnectionDown(this, cause);
+            outsideUp = false;
+        }
+        ctx.close();
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) {
+        logger.debug("In connection closed: " + ctx.channel().remoteAddress().toString());
+        if (outsideUp) {
+            listener.inboundConnectionDown(this, null);
+            outsideUp = false;
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "InConnection{" +
+                "peer=" + peer +
+                ", attributes=" + attributes +
+                ", channel=" + channel +
+                '}';
     }
 }
