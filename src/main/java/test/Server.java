@@ -15,6 +15,7 @@ import java.io.*;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.util.Collections;
+import java.util.Properties;
 
 public class Server implements ChannelListener<FTPMessage> {
 
@@ -28,8 +29,9 @@ public class Server implements ChannelListener<FTPMessage> {
     private FileOutputStream fos;
 
     public Server() throws Exception {
-        channel = new AckosChannel<>(FTPMessage.serializer, this,
-                Collections.singletonMap("address", "localhost"));
+        Properties props = new Properties();
+        props.setProperty("address", "localhost");
+        channel = new AckosChannel<>(FTPMessage.serializer, this,props);
     }
 
     @Override

@@ -1,9 +1,7 @@
 package channel.ackos;
 
-import channel.ChannelEvent;
 import channel.ChannelListener;
 import channel.SingleThreadedChannel;
-import channel.ackos.events.AckosEvent;
 import channel.ackos.events.MessageAckEvent;
 import channel.ackos.events.NodeDownEvent;
 import channel.ackos.messaging.AckosAckMessage;
@@ -37,18 +35,18 @@ public class AckosChannel<T> extends SingleThreadedChannel<T, AckosMessage<T>> {
     private Map<Host, Pair<Connection<AckosMessage<T>>, Queue<T>>> pendingConnections;
     private Map<Host, ConnectionContext<T>> establishedConnections;
 
-    public AckosChannel(ISerializer<T> serializer, ChannelListener<T> list, Map<String, String> arguments)
+    public AckosChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties)
             throws UnknownHostException {
 
         this.listener = list;
 
         InetAddress addr = null;
-        if(arguments.containsKey("address"))
-            addr = Inet4Address.getByName(arguments.get("address"));
+        if(properties.containsKey("address"))
+            addr = Inet4Address.getByName(properties.getProperty("address"));
 
         int port = DEFAULT_PORT;
-        if(arguments.containsKey("port"))
-            port = Integer.parseInt(arguments.get("port"));
+        if(properties.containsKey("port"))
+            port = Integer.parseInt(properties.getProperty("port"));
 
         AckosMessageSerializer<T> tAckosMessageSerializer = new AckosMessageSerializer<>(serializer);
         network = new NetworkManager<>(tAckosMessageSerializer, this, this,

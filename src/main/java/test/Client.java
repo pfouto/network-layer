@@ -17,6 +17,7 @@ import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Properties;
 
 public class Client implements ChannelListener<FTPMessage> {
 
@@ -32,7 +33,7 @@ public class Client implements ChannelListener<FTPMessage> {
     private long total = 0;
 
     public Client(String[] args) throws Exception {
-        channel = new AckosChannel<>(FTPMessage.serializer, this, Collections.emptyMap());
+        channel = new AckosChannel<>(FTPMessage.serializer, this, new Properties());
         server = new Host(InetAddress.getByName("localhost"), AckosChannel.DEFAULT_PORT);
         startTransfer(args[0]);
     }

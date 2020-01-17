@@ -6,7 +6,7 @@ import java.util.List;
 
 public class NodeDownEvent<T> extends AckosEvent<T>{
 
-    public static final short EVENT_ID = 101;
+    public static final short EVENT_ID = 102;
 
     private final Host node;
     private final List<T> messages;
