@@ -15,7 +15,8 @@ public abstract class ControlMessage {
     public enum Type {
         HEARTBEAT(0, HeartbeatMessage.serializer),
         FIRST_HS(1, FirstHandshakeMessage.serializer),
-        SECOND_HS(2, SecondHandshakeMessage.serializer);
+        SECOND_HS(2, SecondHandshakeMessage.serializer),
+        INVALID_ATTR(3, InvalidAttributesMessage.serializer);
 
         public final int opcode;
         private final ControlMessageSerializer<ControlMessage> serializer;

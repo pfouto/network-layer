@@ -1,39 +1,15 @@
 package channel;
 
-import io.netty.util.concurrent.DefaultEventExecutor;
-import io.netty.util.concurrent.DefaultThreadFactory;
 import network.Connection;
-import network.data.Host;
 import network.listeners.InConnListener;
-import network.listeners.MessageListener;
 import network.listeners.OutConnListener;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public abstract class SingleThreadedChannel<T, Y> implements IChannel<T>,
-        MessageListener<Y>, OutConnListener<Y>, InConnListener<Y> {
+public abstract class SingleThreadedBiChannel<T, Y> extends SingleThreadedChannelBase<T,Y>
+        implements OutConnListener<Y>, InConnListener<Y> {
 
-    private static final Logger logger = LogManager.getLogger(SingleThreadedChannel.class);
-
-    private final DefaultEventExecutor loop;
-
-    public SingleThreadedChannel() {
-        loop = new DefaultEventExecutor(new DefaultThreadFactory(SingleThreadedChannel.class));
-    }
-
-    @Override
-    public void sendMessage(T msg, Host peer) {
-        loop.execute(() -> onSendMessage(msg, peer));
-    }
-
-    protected abstract void onSendMessage(T msg, Host peer);
-
-    @Override
-    public void closeConnection(Host peer) {
-        loop.execute(() -> onCloseConnection(peer));
-    }
-
-    protected abstract void onCloseConnection(Host peer);
+    private static final Logger logger = LogManager.getLogger(SingleThreadedBiChannel.class);
 
     @Override
     public void inboundConnectionUp(Connection<Y> con) {
@@ -62,13 +38,6 @@ public abstract class SingleThreadedChannel<T, Y> implements IChannel<T>,
     }
 
     protected abstract void onServerSocketClose(boolean success, Throwable cause);
-
-    @Override
-    public void deliverMessage(Y msg, Connection<Y> conn) {
-        loop.execute(() -> onDeliverMessage(msg, conn));
-    }
-
-    protected abstract void onDeliverMessage(Y msg, Connection<Y> conn);
 
     @Override
     public void outboundConnectionUp(Connection<Y> con) {

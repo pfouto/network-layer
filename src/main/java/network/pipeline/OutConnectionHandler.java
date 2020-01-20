@@ -4,8 +4,11 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
+import io.netty.util.concurrent.Promise;
 import network.ISerializer;
+import network.NetworkManager;
 import network.data.Attributes;
 import network.data.Host;
 import network.listeners.MessageListener;
@@ -14,6 +17,7 @@ import network.messaging.NetworkMessage;
 import network.userevents.HandshakeCompleted;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import test.Client;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
@@ -32,7 +36,7 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
     public OutConnectionHandler(Host peer, Bootstrap bootstrap, OutConnListener<T> listener,
                                 MessageListener<T> consumer, ISerializer<T> serializer,
                                 EventLoop loop, Attributes attrs, int hbInterval, int hbTolerance) {
-        super(consumer, loop,false);
+        super(consumer, loop, false);
         this.peer = peer;
         this.attributes = attrs;
 
@@ -76,17 +80,25 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
     }
 
     //Concurrent - Adds event to loop
-    public void sendMessage(T msg) {
+    @Override
+    public void sendMessage(T msg, GenericFutureListener<ChannelFuture> l) {
         loop.execute(() -> {
             if (state == State.CONNECTED) {
                 logger.debug("Writing " + msg + " to outChannel of " + peer);
-                channel.writeAndFlush(new NetworkMessage(NetworkMessage.APP_MSG, msg));
+                ChannelFuture future = channel.writeAndFlush(new NetworkMessage(NetworkMessage.APP_MSG, msg));
+                if (l != null) future.addListener(l);
             } else
                 logger.error("Writing message " + msg + " to channel " + peer + " in unprepared state " + state);
         });
     }
 
+    @Override
+    public void sendMessage(T msg) {
+        sendMessage(msg, null);
+    }
+
     //Concurrent - Adds event to loop
+    @Override
     public void disconnect() {
         loop.execute(() -> {
             if (state == State.DEAD)
@@ -124,7 +136,7 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
                 throw new AssertionError("State is " + state + " in exception caught closed callback");
         }
         state = State.DEAD;
-        if(ctx.channel().isOpen())
+        if (ctx.channel().isOpen())
             ctx.close();
     }
 

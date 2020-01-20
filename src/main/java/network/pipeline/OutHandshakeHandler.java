@@ -43,6 +43,8 @@ public class OutHandshakeHandler extends ChannelDuplexHandler {
         if(cMsg.type == ControlMessage.Type.SECOND_HS) {
             ctx.fireUserEventTriggered(new HandshakeCompleted(attrs));
             ctx.pipeline().remove(this);
+        } else if (cMsg.type == ControlMessage.Type.INVALID_ATTR){
+            throw new Exception("Attributes refused");
         } else {
             throw new Exception("Received unexpected message in handshake: " + msg);
         }

@@ -71,10 +71,6 @@ public abstract class ConnectionHandler<T> extends ChannelDuplexHandler implemen
         return attributes;
     }
 
-    public abstract void sendMessage(T msg);
-
-    public abstract void disconnect();
-
     public boolean isInbound(){
         return incoming;
     }

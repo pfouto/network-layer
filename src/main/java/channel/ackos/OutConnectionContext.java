@@ -2,19 +2,21 @@ package channel.ackos;
 
 import channel.ackos.messaging.AckosAppMessage;
 import channel.ackos.messaging.AckosMessage;
+import io.netty.channel.ChannelFuture;
+import io.netty.util.concurrent.GenericFutureListener;
 import network.Connection;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.LinkedList;
 import java.util.Queue;
 
-class ConnectionContext<T> {
+class OutConnectionContext<T> {
 
     private final Connection<AckosMessage<T>> connection;
     private final Queue<Pair<Long, T>> pending;
     private long counter;
 
-    ConnectionContext(Connection<AckosMessage<T>> connection){
+    OutConnectionContext(Connection<AckosMessage<T>> connection) {
         this.connection = connection;
         pending = new LinkedList<>();
         counter = 0;
@@ -28,14 +30,14 @@ class ConnectionContext<T> {
         return pending;
     }
 
-    void sendMessage(T msg){
+    void sendMessage(T msg, GenericFutureListener<ChannelFuture> l) {
         pending.add(Pair.of(++counter, msg));
-        connection.sendMessage(new AckosAppMessage<>(counter, msg));
+        connection.sendMessage(new AckosAppMessage<>(counter, msg), l);
     }
 
-    T ack(long id){
+    T ack(long id) {
         Pair<Long, T> poll = pending.poll();
-        if(poll == null || poll.getKey() != id) throw new RuntimeException("Ack out of order: " + id + " " + poll);
+        if (poll == null || poll.getKey() != id) throw new RuntimeException("Ack out of order: " + id + " " + poll);
         return poll.getValue();
     }
 }

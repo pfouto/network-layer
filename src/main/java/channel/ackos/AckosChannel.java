@@ -1,13 +1,13 @@
 package channel.ackos;
 
 import channel.ChannelListener;
-import channel.SingleThreadedChannel;
-import channel.ackos.events.MessageAckEvent;
+import channel.SingleThreadedBiChannel;
 import channel.ackos.events.NodeDownEvent;
 import channel.ackos.messaging.AckosAckMessage;
 import channel.ackos.messaging.AckosAppMessage;
 import channel.ackos.messaging.AckosMessage;
 import channel.ackos.messaging.AckosMessageSerializer;
+import network.AttributeValidator;
 import network.Connection;
 import network.ISerializer;
 import network.NetworkManager;
@@ -23,9 +23,17 @@ import java.net.UnknownHostException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class AckosChannel<T> extends SingleThreadedChannel<T, AckosMessage<T>> {
+public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>> implements AttributeValidator {
 
     private static final Logger logger = LogManager.getLogger(AckosChannel.class);
+    private static final short ACKOS_MAGIC_NUMBER = 0x4505;
+
+    private static final Attributes ACKOS_ATTRIBUTES;
+
+    static {
+        ACKOS_ATTRIBUTES = new Attributes();
+        ACKOS_ATTRIBUTES.putShort("channel", ACKOS_MAGIC_NUMBER);
+    }
 
     public final static int DEFAULT_PORT = 13174;
 
@@ -33,7 +41,7 @@ public class AckosChannel<T> extends SingleThreadedChannel<T, AckosMessage<T>> {
     private final ChannelListener<T> listener;
 
     private Map<Host, Pair<Connection<AckosMessage<T>>, Queue<T>>> pendingConnections;
-    private Map<Host, ConnectionContext<T>> establishedConnections;
+    private Map<Host, OutConnectionContext<T>> establishedConnections;
 
     public AckosChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties)
             throws UnknownHostException {
@@ -41,19 +49,19 @@ public class AckosChannel<T> extends SingleThreadedChannel<T, AckosMessage<T>> {
         this.listener = list;
 
         InetAddress addr = null;
-        if(properties.containsKey("address"))
+        if (properties.containsKey("address"))
             addr = Inet4Address.getByName(properties.getProperty("address"));
 
         int port = DEFAULT_PORT;
-        if(properties.containsKey("port"))
+        if (properties.containsKey("port"))
             port = Integer.parseInt(properties.getProperty("port"));
 
         AckosMessageSerializer<T> tAckosMessageSerializer = new AckosMessageSerializer<>(serializer);
-        network = new NetworkManager<>(tAckosMessageSerializer, this, this,
+        network = new NetworkManager<>(tAckosMessageSerializer, this,
                 1000, 3000, 1000);
 
-        if(addr != null)
-            network.createServerSocket(this, new Host(addr, port));
+        if (addr != null)
+            network.createServerSocket(this, new Host(addr, port), this);
 
         pendingConnections = new HashMap<>();
         establishedConnections = new HashMap<>();
@@ -61,12 +69,15 @@ public class AckosChannel<T> extends SingleThreadedChannel<T, AckosMessage<T>> {
 
     @Override
     protected void onSendMessage(T msg, Host peer) {
-        ConnectionContext<T> context = establishedConnections.get(peer);
+
+        OutConnectionContext<T> context = establishedConnections.get(peer);
         if (context != null) {
-            context.sendMessage(msg);
+            context.sendMessage(msg, future -> {
+                if (!future.isSuccess()) listener.messageFailed(msg, peer, future.cause());
+            });
         } else {
             Pair<Connection<AckosMessage<T>>, Queue<T>> pair = pendingConnections.computeIfAbsent(peer, k ->
-                    Pair.of(network.createConnection(peer, Attributes.EMPTY), new LinkedList<>()));
+                    Pair.of(network.createConnection(peer, ACKOS_ATTRIBUTES, this), new LinkedList<>()));
             pair.getValue().add(msg);
         }
     }
@@ -74,28 +85,32 @@ public class AckosChannel<T> extends SingleThreadedChannel<T, AckosMessage<T>> {
     @Override
     protected void onCloseConnection(Host peer) {
         Pair<Connection<AckosMessage<T>>, Queue<T>> remove = pendingConnections.remove(peer);
-        if(remove != null) remove.getKey().disconnect();
+        if (remove != null) remove.getKey().disconnect();
 
-        ConnectionContext<T> context = establishedConnections.remove(peer);
-        if(context != null) context.getConnection().disconnect();
+        OutConnectionContext<T> context = establishedConnections.remove(peer);
+        if (context != null) context.getConnection().disconnect();
     }
 
     @Override
     protected void onOutboundConnectionUp(Connection<AckosMessage<T>> conn) {
         Pair<Connection<AckosMessage<T>>, Queue<T>> remove = pendingConnections.remove(conn.getPeer());
-        if(remove == null) throw new RuntimeException("Pending null in connection up");
+        if (remove == null) throw new RuntimeException("Pending null in connection up");
         logger.debug("Outbound established: " + conn);
-        ConnectionContext<T> ctx = new ConnectionContext<>(conn);
-        ConnectionContext<T> put = establishedConnections.put(conn.getPeer(), ctx);
-        if(put != null) throw new RuntimeException("Context exists in connection up");
+        OutConnectionContext<T> ctx = new OutConnectionContext<>(conn);
+        OutConnectionContext<T> put = establishedConnections.put(conn.getPeer(), ctx);
+        if (put != null) throw new RuntimeException("Context exists in connection up");
 
-        remove.getValue().forEach(ctx::sendMessage);
+        for (T t : remove.getValue()) {
+            ctx.sendMessage(t, future -> {
+                if (!future.isSuccess()) listener.messageFailed(t, conn.getPeer(), future.cause());
+            });
+        }
     }
 
     @Override
     protected void onOutboundConnectionDown(Connection<AckosMessage<T>> conn, Throwable cause) {
-        ConnectionContext<T> context = establishedConnections.remove(conn.getPeer());
-        if(context == null) throw new RuntimeException("Connection down with no context available");
+        OutConnectionContext<T> context = establishedConnections.remove(conn.getPeer());
+        if (context == null) throw new RuntimeException("Connection down with no context available");
 
         List<T> failed = context.getPending().stream().map(Pair::getValue).collect(Collectors.toList());
 
@@ -104,26 +119,26 @@ public class AckosChannel<T> extends SingleThreadedChannel<T, AckosMessage<T>> {
 
     @Override
     protected void onOutboundConnectionFailed(Connection<AckosMessage<T>> conn, Throwable cause) {
-        if(establishedConnections.containsKey(conn.getPeer()))
+        if (establishedConnections.containsKey(conn.getPeer()))
             throw new RuntimeException("Context exists in conn failed");
 
         Pair<Connection<AckosMessage<T>>, Queue<T>> remove = pendingConnections.remove(conn.getPeer());
-        if(remove == null) throw new RuntimeException("Connection failed with no pending");
+        if (remove == null) throw new RuntimeException("Connection failed with no pending");
 
         List<T> failed = new LinkedList<>(remove.getRight());
         listener.deliverEvent(new NodeDownEvent<>(conn.getPeer(), failed, cause));
     }
 
     private void handleAckMessage(AckosAckMessage<T> msg, Connection<AckosMessage<T>> conn) {
-        if(conn.isInbound()) throw new RuntimeException("Received AckMessage in inbound connection");
-        ConnectionContext<T> context = establishedConnections.get(conn.getPeer());
-        if(context == null) throw new RuntimeException("Received AckMessage without an established connection");
+        if (conn.isInbound()) throw new RuntimeException("Received AckMessage in inbound connection");
+        OutConnectionContext<T> context = establishedConnections.get(conn.getPeer());
+        if (context == null) throw new RuntimeException("Received AckMessage without an established connection");
         T ackMsg = context.ack(msg.getId());
-        listener.deliverEvent(new MessageAckEvent<>(conn.getPeer(), ackMsg));
+        listener.messageSent(ackMsg, conn.getPeer());
     }
 
     private void handleAppMessage(AckosAppMessage<T> msg, Connection<AckosMessage<T>> conn) {
-        if(conn.isOutbound()) throw new RuntimeException("Received AppMessage in outbound connection");
+        if (conn.isOutbound()) throw new RuntimeException("Received AppMessage in outbound connection");
         conn.sendMessage(new AckosAckMessage<>(msg.getId()));
         listener.deliverMessage(msg.getPayload(), conn.getPeer());
     }
@@ -163,4 +178,9 @@ public class AckosChannel<T> extends SingleThreadedChannel<T, AckosMessage<T>> {
         }
     }
 
+    @Override
+    public boolean validateAttributes(Attributes attr) {
+        Short channel = attr.getShort("channel");
+        return channel != null && channel == ACKOS_MAGIC_NUMBER;
+    }
 }

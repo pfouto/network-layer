@@ -1,6 +1,10 @@
 package network.pipeline;
 
 import io.netty.channel.*;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
+import io.netty.util.concurrent.Promise;
+import io.netty.util.concurrent.PromiseNotifier;
 import network.data.Host;
 import network.listeners.MessageListener;
 import network.listeners.InConnListener;
@@ -32,10 +36,17 @@ public class InConnectionHandler<T> extends ConnectionHandler<T> {
         this.peer = new Host(addr.getAddress(), addr.getPort());
     }
 
-    public void sendMessage(T msg) {
+    @Override
+    public void sendMessage(T msg, GenericFutureListener<ChannelFuture> l) {
         loop.execute(() -> {
-            channel.writeAndFlush(new NetworkMessage(NetworkMessage.APP_MSG, msg));
+            ChannelFuture future = channel.writeAndFlush(new NetworkMessage(NetworkMessage.APP_MSG, msg));
+            if(l != null) future.addListener(l);
         });
+    }
+
+    @Override
+    public void sendMessage(T msg) {
+        sendMessage(msg, null);
     }
 
     public void disconnect() {

@@ -30,31 +30,29 @@ public class NetworkManager<T> {
 
     private final ISerializer<T> serializer;
     private final MessageListener<T> consumer;
-    private final OutConnListener<T> listener;
     private final int hbInterval;
     private final int hbTolerance;
     private final int connectTimeout;
 
-    public NetworkManager(ISerializer<T> serializer, MessageListener<T> consumer, OutConnListener<T> listener,
+    public NetworkManager(ISerializer<T> serializer, MessageListener<T> consumer,
                           int hbInterval, int hbTolerance, int connectTimeout) {
         clientBootstrap = setupClientBootstrap();
         this.serializer = serializer;
         this.consumer = consumer;
-        this.listener = listener;
         this.hbInterval = hbInterval;
         this.hbTolerance = hbTolerance;
         this.connectTimeout = connectTimeout;
     }
 
-    public Connection<T> createConnection(Host peer, Attributes attrs) {
+    public Connection<T> createConnection(Host peer, Attributes attrs, OutConnListener<T> listener) {
         return new OutConnectionHandler<>(peer, clientBootstrap, listener, consumer,
                 serializer, workerGroup.next(), attrs, hbInterval, hbTolerance);
     }
 
-    public void createServerSocket(InConnListener<T> listener, Host listenIPAndPort) {
-        if(serverChannel != null) return;
+    public void createServerSocket(InConnListener<T> listener, Host listenIPAndPort, AttributeValidator validator) {
+        if (serverChannel != null) return;
 
-         //TODO change groups options
+        //TODO change groups options
         EventLoopGroup workerGroup = new NioEventLoopGroup();
         ServerBootstrap b = new ServerBootstrap();
         b.group(workerGroup).channel(NioServerSocketChannel.class);
@@ -62,10 +60,10 @@ public class NetworkManager<T> {
             @Override
             protected void initChannel(SocketChannel ch) {
                 ch.pipeline().addLast("IdleStateHandler",
-                        new IdleStateHandler(hbTolerance,hbInterval, 0, MILLISECONDS));
+                        new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
                 ch.pipeline().addLast("MessageDecoder", new MessageDecoder<>(serializer));
                 ch.pipeline().addLast("MessageEncoder", new MessageEncoder<>(serializer));
-                ch.pipeline().addLast("InHandshakeHandler", new InHandshakeHandler());
+                ch.pipeline().addLast("InHandshakeHandler", new InHandshakeHandler(validator));
                 ch.pipeline().addLast("InCon", new InConnectionHandler<>(listener, consumer, ch.eventLoop()));
             }
         });
