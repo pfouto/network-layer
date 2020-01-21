@@ -1,4 +1,4 @@
-package test;
+package test.ackos;
 
 import channel.ChannelEvent;
 import channel.ChannelListener;
@@ -8,6 +8,10 @@ import channel.ackos.events.NodeDownEvent;
 import network.data.Host;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import test.ByeMsg;
+import test.FTPMessage;
+import test.HelloMsg;
+import test.PartMsg;
 
 import java.io.*;
 import java.net.InetAddress;
@@ -44,9 +48,10 @@ public class Client implements ChannelListener<FTPMessage> {
         logger.info("Message: " + msg + " : " + from);
     }
 
-    private void onMessageAck(MessageAckEvent<FTPMessage> evt) {
-        logger.info("Ack: " + evt);
-        if (evt.getMessage() instanceof ByeMsg) {
+    @Override
+    public void messageSent(FTPMessage msg, Host to) {
+        logger.info("Ack: " + msg);
+        if (msg instanceof ByeMsg) {
             logger.info("Done!");
             return;
         }
@@ -65,17 +70,19 @@ public class Client implements ChannelListener<FTPMessage> {
         }
     }
 
+    @Override
+    public void messageFailed(FTPMessage msg, Host to, Throwable cause) {
+
+    }
+
     private void onNodeDown(NodeDownEvent<FTPMessage> evt) {
         logger.error(evt);
     }
 
     @Override
-    public void deliverEvent(ChannelEvent<FTPMessage> evt) {
-        if (evt instanceof MessageAckEvent) {
-            onMessageAck((MessageAckEvent<FTPMessage>) evt);
-        } else {
+    public void deliverEvent(ChannelEvent evt) {
+        if (evt instanceof NodeDownEvent)
             onNodeDown((NodeDownEvent<FTPMessage>) evt);
-        }
     }
 
     public static void main(String[] args) throws Exception {

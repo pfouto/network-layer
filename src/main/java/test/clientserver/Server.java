@@ -1,15 +1,23 @@
-package test;
+package test.clientserver;
 
 import channel.ChannelEvent;
 import channel.ChannelListener;
 import channel.IChannel;
 import channel.ackos.AckosChannel;
 import channel.ackos.events.NodeDownEvent;
+import channel.simpleclientserver.SimpleServerChannel;
+import channel.simpleclientserver.events.ClientDownEvent;
+import channel.simpleclientserver.events.ClientUpEvent;
 import network.data.Host;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import test.ByeMsg;
+import test.FTPMessage;
+import test.HelloMsg;
+import test.PartMsg;
 
-import java.io.*;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.Properties;
 
 public class Server implements ChannelListener<FTPMessage> {
@@ -26,7 +34,7 @@ public class Server implements ChannelListener<FTPMessage> {
     public Server() throws Exception {
         Properties props = new Properties();
         props.setProperty("address", "localhost");
-        channel = new AckosChannel<>(FTPMessage.serializer, this,props);
+        channel = new SimpleServerChannel<>(FTPMessage.serializer, this, props);
     }
 
     @Override
@@ -35,12 +43,13 @@ public class Server implements ChannelListener<FTPMessage> {
         try {
             if (msg instanceof HelloMsg) {
                 fos = new FileOutputStream("output/" + ((HelloMsg) msg).path);
-            } else if (msg instanceof PartMsg){
+            } else if (msg instanceof PartMsg) {
                 PartMsg pm = (PartMsg) msg;
                 fos.write(pm.bytes);
             } else {
                 ByeMsg bm = (ByeMsg) msg;
                 fos.close();
+                channel.sendMessage(new ByeMsg(20), from);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -48,22 +57,22 @@ public class Server implements ChannelListener<FTPMessage> {
         }
     }
 
-
-    private void onMessageAck(MessageAckEvent<FTPMessage> evt) {
-        logger.info("Ack: " + evt);
-    }
-
-    private void onNodeDown(NodeDownEvent<FTPMessage> evt) {
-        logger.error(evt);
+    @Override
+    public void messageSent(FTPMessage msg, Host to) {
+        logger.info("Sent: " + msg);
     }
 
     @Override
-    public void deliverEvent(ChannelEvent<FTPMessage> evt) {
-        if (evt instanceof MessageAckEvent) {
-            onMessageAck((MessageAckEvent<FTPMessage>) evt);
-        } else {
-            onNodeDown((NodeDownEvent<FTPMessage>) evt);
-        }
+    public void messageFailed(FTPMessage msg, Host to, Throwable cause) {
+        logger.info("Message failed: " + msg);
+    }
+
+    @Override
+    public void deliverEvent(ChannelEvent evt) {
+        if (evt instanceof ClientUpEvent)
+            logger.info("New client: " + ((ClientUpEvent) evt).getClient());
+        else
+            logger.info("Client gone: " + ((ClientDownEvent) evt).getClient());
     }
 
     public static void main(String[] args) throws Exception {

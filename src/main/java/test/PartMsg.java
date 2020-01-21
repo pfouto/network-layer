@@ -9,7 +9,7 @@ import java.util.Arrays;
 
 public class PartMsg extends FTPMessage {
 
-    final byte[] bytes;
+    public final byte[] bytes;
 
     public PartMsg(byte[] bytes){
         super(Type.PART);
@@ -27,15 +27,16 @@ public class PartMsg extends FTPMessage {
                 '}';
     }
 
-    static FTPSerializer serializer = new FTPSerializer<PartMsg>() {
+    static FTPSerializer<FTPMessage> serializer = new FTPSerializer<FTPMessage>() {
         @Override
-        public void serialize(PartMsg partMsg, ByteBuf out) throws IOException {
+        public void serialize(FTPMessage ftpMessage, ByteBuf out)  {
+            PartMsg partMsg = (PartMsg) ftpMessage;
             out.writeInt(partMsg.bytes.length);
             out.writeBytes(partMsg.bytes);
         }
 
         @Override
-        public PartMsg deserialize(ByteBuf in) throws IOException {
+        public PartMsg deserialize(ByteBuf in)  {
             int size = in.readInt();
             byte[] bytes = new byte[size];
             in.readBytes(bytes);

@@ -10,5 +10,5 @@ public interface ChannelListener<T> {
 
     void messageFailed(T msg, Host to, Throwable cause);
 
-    void deliverEvent(ChannelEvent<T> evt);
+    void deliverEvent(ChannelEvent evt);
 }

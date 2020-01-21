@@ -4,11 +4,10 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.timeout.IdleStateHandler;
-import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import io.netty.util.concurrent.Promise;
+import io.netty.util.concurrent.PromiseNotifier;
 import network.ISerializer;
-import network.NetworkManager;
 import network.data.Attributes;
 import network.data.Host;
 import network.listeners.MessageListener;
@@ -17,7 +16,6 @@ import network.messaging.NetworkMessage;
 import network.userevents.HandshakeCompleted;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import test.Client;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
@@ -81,12 +79,12 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
 
     //Concurrent - Adds event to loop
     @Override
-    public void sendMessage(T msg, GenericFutureListener<ChannelFuture> l) {
+    public void sendMessage(T msg, Promise<Void> promise) {
         loop.execute(() -> {
             if (state == State.CONNECTED) {
                 logger.debug("Writing " + msg + " to outChannel of " + peer);
                 ChannelFuture future = channel.writeAndFlush(new NetworkMessage(NetworkMessage.APP_MSG, msg));
-                if (l != null) future.addListener(l);
+                if(promise != null) future.addListener(new PromiseNotifier<>(promise));
             } else
                 logger.error("Writing message " + msg + " to channel " + peer + " in unprepared state " + state);
         });
@@ -141,7 +139,7 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
     }
 
     @Override
-    public void operationComplete(ChannelFuture future) throws Exception {
+    public void operationComplete(ChannelFuture future) {
         //Connection callback
         if (!future.isSuccess()) {
             logger.debug("Connecting failed: " + future.cause());

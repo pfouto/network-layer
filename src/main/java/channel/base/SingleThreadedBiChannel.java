@@ -1,4 +1,4 @@
-package channel;
+package channel.base;
 
 import network.Connection;
 import network.listeners.InConnListener;

@@ -19,7 +19,7 @@ public interface Connection<T> {
 
     boolean isOutbound();
 
-    void sendMessage(T msg, GenericFutureListener<ChannelFuture> f);
+    void sendMessage(T msg, Promise<Void> p);
 
     void sendMessage(T msg);
 }

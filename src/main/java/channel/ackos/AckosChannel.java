@@ -1,12 +1,13 @@
 package channel.ackos;
 
 import channel.ChannelListener;
-import channel.SingleThreadedBiChannel;
+import channel.base.SingleThreadedBiChannel;
 import channel.ackos.events.NodeDownEvent;
 import channel.ackos.messaging.AckosAckMessage;
 import channel.ackos.messaging.AckosAppMessage;
 import channel.ackos.messaging.AckosMessage;
 import channel.ackos.messaging.AckosMessageSerializer;
+import io.netty.util.concurrent.Promise;
 import network.AttributeValidator;
 import network.Connection;
 import network.ISerializer;
@@ -72,9 +73,11 @@ public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>>
 
         OutConnectionContext<T> context = establishedConnections.get(peer);
         if (context != null) {
-            context.sendMessage(msg, future -> {
+            Promise<Void> promise = loop.newPromise();
+            promise.addListener(future -> {
                 if (!future.isSuccess()) listener.messageFailed(msg, peer, future.cause());
             });
+            context.sendMessage(msg, promise);
         } else {
             Pair<Connection<AckosMessage<T>>, Queue<T>> pair = pendingConnections.computeIfAbsent(peer, k ->
                     Pair.of(network.createConnection(peer, ACKOS_ATTRIBUTES, this), new LinkedList<>()));
@@ -101,9 +104,11 @@ public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>>
         if (put != null) throw new RuntimeException("Context exists in connection up");
 
         for (T t : remove.getValue()) {
-            ctx.sendMessage(t, future -> {
+            Promise<Void> promise = loop.newPromise();
+            promise.addListener(future -> {
                 if (!future.isSuccess()) listener.messageFailed(t, conn.getPeer(), future.cause());
             });
+            ctx.sendMessage(t, promise);
         }
     }
 

@@ -4,6 +4,7 @@ import channel.ackos.messaging.AckosAppMessage;
 import channel.ackos.messaging.AckosMessage;
 import io.netty.channel.ChannelFuture;
 import io.netty.util.concurrent.GenericFutureListener;
+import io.netty.util.concurrent.Promise;
 import network.Connection;
 import org.apache.commons.lang3.tuple.Pair;
 
@@ -30,9 +31,9 @@ class OutConnectionContext<T> {
         return pending;
     }
 
-    void sendMessage(T msg, GenericFutureListener<ChannelFuture> l) {
+    void sendMessage(T msg, Promise<Void> p) {
         pending.add(Pair.of(++counter, msg));
-        connection.sendMessage(new AckosAppMessage<>(counter, msg), l);
+        connection.sendMessage(new AckosAppMessage<>(counter, msg), p);
     }
 
     T ack(long id) {

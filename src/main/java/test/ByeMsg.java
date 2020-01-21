@@ -24,14 +24,15 @@ public class ByeMsg extends FTPMessage {
                 '}';
     }
 
-    static FTPSerializer serializer = new FTPSerializer<ByeMsg>() {
+    static FTPSerializer<FTPMessage> serializer = new FTPSerializer<FTPMessage>() {
         @Override
-        public void serialize(ByeMsg byeMsg, ByteBuf out) throws IOException {
+        public void serialize(FTPMessage ftpMessage, ByteBuf out) {
+            ByeMsg byeMsg = (ByeMsg) ftpMessage;
             out.writeLong(byeMsg.size);
         }
 
         @Override
-        public ByeMsg deserialize(ByteBuf in) throws IOException {
+        public ByeMsg deserialize(ByteBuf in) {
             return new ByeMsg(in.readLong());
         }
     };

@@ -1,6 +1,6 @@
 package channel;
 
-public abstract class ChannelEvent<T> {
+public abstract class ChannelEvent {
 
     private final short id;
 

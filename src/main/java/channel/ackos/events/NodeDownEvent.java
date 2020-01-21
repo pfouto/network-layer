@@ -4,7 +4,7 @@ import network.data.Host;
 
 import java.util.List;
 
-public class NodeDownEvent<T> extends AckosEvent<T>{
+public class NodeDownEvent<T> extends AckosEvent {
 
     public static final short EVENT_ID = 102;
 

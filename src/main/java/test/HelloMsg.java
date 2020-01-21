@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 
 public class HelloMsg extends FTPMessage {
 
-    final String path;
+    public final String path;
 
     public HelloMsg(String path){
         super(Type.HELLO);
@@ -26,16 +26,17 @@ public class HelloMsg extends FTPMessage {
                 '}';
     }
 
-    static FTPSerializer serializer = new FTPSerializer<HelloMsg>() {
+    static FTPSerializer<FTPMessage> serializer = new FTPSerializer<FTPMessage>() {
         @Override
-        public void serialize(HelloMsg helloMsg, ByteBuf out) throws IOException {
+        public void serialize(FTPMessage ftpMessage, ByteBuf out) {
+            HelloMsg helloMsg = (HelloMsg) ftpMessage;
             int size = ByteBufUtil.utf8Bytes(helloMsg.path);
             out.writeInt(size);
             ByteBufUtil.reserveAndWriteUtf8(out, helloMsg.path, size);
         }
 
         @Override
-        public HelloMsg deserialize(ByteBuf in) throws IOException {
+        public HelloMsg deserialize(ByteBuf in) {
             int size = in.readInt();
             String path = in.readCharSequence(size, StandardCharsets.UTF_8).toString();
             return new HelloMsg(path);

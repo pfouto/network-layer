@@ -1,12 +1,7 @@
-package channel;
+package channel.base;
 
-import io.netty.util.concurrent.DefaultEventExecutor;
-import io.netty.util.concurrent.DefaultThreadFactory;
 import network.Connection;
-import network.data.Host;
 import network.listeners.InConnListener;
-import network.listeners.MessageListener;
-import network.listeners.OutConnListener;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

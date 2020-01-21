@@ -37,10 +37,10 @@ public class InConnectionHandler<T> extends ConnectionHandler<T> {
     }
 
     @Override
-    public void sendMessage(T msg, GenericFutureListener<ChannelFuture> l) {
+    public void sendMessage(T msg, Promise<Void> promise) {
         loop.execute(() -> {
             ChannelFuture future = channel.writeAndFlush(new NetworkMessage(NetworkMessage.APP_MSG, msg));
-            if(l != null) future.addListener(l);
+            if(promise != null) future.addListener(new PromiseNotifier<>(promise));
         });
     }
 
