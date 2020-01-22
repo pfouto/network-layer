@@ -15,8 +15,8 @@ public abstract class SingleThreadedChannelBase<T, Y> implements IChannel<T>, Me
 
     protected final DefaultEventExecutor loop;
 
-    public SingleThreadedChannelBase() {
-        loop = new DefaultEventExecutor(new DefaultThreadFactory(SingleThreadedChannelBase.class));
+    public SingleThreadedChannelBase(String threadName) {
+        loop = new DefaultEventExecutor(new DefaultThreadFactory(threadName));
     }
 
     @Override

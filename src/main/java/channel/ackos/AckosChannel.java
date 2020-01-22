@@ -46,7 +46,7 @@ public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>>
 
     public AckosChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties)
             throws UnknownHostException {
-
+        super("AckosChannel");
         this.listener = list;
 
         InetAddress addr = null;

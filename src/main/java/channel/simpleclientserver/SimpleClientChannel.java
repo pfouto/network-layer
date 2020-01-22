@@ -39,6 +39,7 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
 
     public SimpleClientChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties)
             throws UnknownHostException {
+        super("SimpleClientChannel");
 
         this.listener = list;
 

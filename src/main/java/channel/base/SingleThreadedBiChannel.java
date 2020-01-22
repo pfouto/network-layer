@@ -11,6 +11,10 @@ public abstract class SingleThreadedBiChannel<T, Y> extends SingleThreadedChanne
 
     private static final Logger logger = LogManager.getLogger(SingleThreadedBiChannel.class);
 
+    public SingleThreadedBiChannel(String threadName){
+        super(threadName);
+    }
+
     @Override
     public void inboundConnectionUp(Connection<Y> con) {
         loop.execute(() -> onInboundConnectionUp(con));

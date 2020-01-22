@@ -10,6 +10,10 @@ public abstract class SingleThreadedClientChannel<T, Y> extends SingleThreadedCh
 
     private static final Logger logger = LogManager.getLogger(SingleThreadedClientChannel.class);
 
+    public SingleThreadedClientChannel(String threadName){
+        super(threadName);
+    }
+
     @Override
     public void outboundConnectionUp(Connection<Y> con) {
         loop.execute(() -> onOutboundConnectionUp(con));

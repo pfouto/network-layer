@@ -35,6 +35,7 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
 
     public SimpleServerChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties)
             throws UnknownHostException {
+        super("SimpleServerChannel");
 
         this.listener = list;
         this.clientConnections = new HashMap<>();
