@@ -5,7 +5,7 @@ import network.data.Host;
 import java.util.List;
 import java.util.Queue;
 
-public class ConnectionFailedEvent<T>  extends TCPEvent {
+public class OutConnectionFailed<T>  extends TCPEvent {
 
     public static final short EVENT_ID = 302;
 
@@ -15,14 +15,14 @@ public class ConnectionFailedEvent<T>  extends TCPEvent {
 
     @Override
     public String toString() {
-        return "ConnectionFailedEvent{" +
+        return "OutConnectionFailed{" +
                 "node=" + node +
                 ", pendingMessages=" + pendingMessages +
                 ", cause=" + cause +
                 '}';
     }
 
-    public ConnectionFailedEvent(Host node, Queue<T> pendingMessages, Throwable cause) {
+    public OutConnectionFailed(Host node, Queue<T> pendingMessages, Throwable cause) {
         super(EVENT_ID);
         this.cause = cause;
         this.node = node;

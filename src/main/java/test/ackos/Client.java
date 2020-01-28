@@ -40,7 +40,7 @@ public class Client implements ChannelListener<FTPMessage> {
     public void startTransfer(String path) throws FileNotFoundException {
         File file = new File(path);
         fin = new FileInputStream(file);
-        channel.sendMessage(new HelloMsg(path.substring(path.lastIndexOf("/") + 1)), server);
+        channel.sendMessage(new HelloMsg(path.substring(path.lastIndexOf("/") + 1)), server, -1);
     }
 
     @Override
@@ -60,9 +60,9 @@ public class Client implements ChannelListener<FTPMessage> {
             int read = fin.read(nextBytes);
             if (read > 0) {
                 total += read;
-                channel.sendMessage(new PartMsg(Arrays.copyOf(nextBytes, read)), server);
+                channel.sendMessage(new PartMsg(Arrays.copyOf(nextBytes, read)), server, -1);
             } else {
-                channel.sendMessage(new ByeMsg(total), server);
+                channel.sendMessage(new ByeMsg(total), server, -1);
             }
         } catch (IOException e) {
             e.printStackTrace();

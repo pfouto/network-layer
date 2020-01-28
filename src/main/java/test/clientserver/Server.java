@@ -49,7 +49,7 @@ public class Server implements ChannelListener<FTPMessage> {
             } else {
                 ByeMsg bm = (ByeMsg) msg;
                 fos.close();
-                channel.sendMessage(new ByeMsg(20), from);
+                channel.sendMessage(new ByeMsg(20), from, -1);
             }
         } catch (IOException e) {
             e.printStackTrace();

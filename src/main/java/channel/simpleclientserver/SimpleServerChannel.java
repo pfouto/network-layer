@@ -57,7 +57,7 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
     }
 
     @Override
-    protected void onSendMessage(T msg, Host peer) {
+    protected void onSendMessage(T msg, Host peer, int mode) {
         Connection<T> conn = clientConnections.get(peer);
         if (conn != null) {
             Promise<Void> promise = loop.newPromise();

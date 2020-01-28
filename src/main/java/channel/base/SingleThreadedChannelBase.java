@@ -20,11 +20,11 @@ public abstract class SingleThreadedChannelBase<T, Y> implements IChannel<T>, Me
     }
 
     @Override
-    public void sendMessage(T msg, Host peer) {
-        loop.execute(() -> onSendMessage(msg, peer));
+    public void sendMessage(T msg, Host peer, int mode) {
+        loop.execute(() -> onSendMessage(msg, peer, mode));
     }
 
-    protected abstract void onSendMessage(T msg, Host peer);
+    protected abstract void onSendMessage(T msg, Host peer, int mode);
 
     @Override
     public void closeConnection(Host peer) {

@@ -2,24 +2,22 @@ package channel.tcp.events;
 
 import network.data.Host;
 
-import java.util.List;
+public class InConnectionDown extends TCPEvent {
 
-public class NodeDownEvent extends TCPEvent {
-
-    public static final short EVENT_ID = 301;
+    public static final short EVENT_ID = 305;
 
     private final Host node;
     private final Throwable cause;
 
     @Override
     public String toString() {
-        return "NodeDownEvent{" +
+        return "InConnectionDown{" +
                 "node=" + node +
                 ", cause=" + cause +
                 '}';
     }
 
-    public NodeDownEvent(Host node, Throwable cause) {
+    public InConnectionDown(Host node, Throwable cause) {
         super(EVENT_ID);
         this.cause = cause;
         this.node = node;
