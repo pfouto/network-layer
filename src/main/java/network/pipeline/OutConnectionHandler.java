@@ -170,7 +170,7 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
 
     @Override
     public String toString() {
-        return "InConnection{" +
+        return "OutConnectionHandler{" +
                 "peer=" + peer +
                 ", attributes=" + attributes +
                 ", channel=" + channel +

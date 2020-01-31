@@ -87,7 +87,7 @@ public class InConnectionHandler<T> extends ConnectionHandler<T> {
 
     @Override
     public String toString() {
-        return "InConnection{" +
+        return "InConnectionHandler{" +
                 "peer=" + peer +
                 ", attributes=" + attributes +
                 ", channel=" + channel +

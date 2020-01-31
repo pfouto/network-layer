@@ -109,7 +109,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(peer);
         if (remove != null) remove.getKey().disconnect();
 
-        Connection<T> established = establishedOut.remove(peer);
+        Connection<T> established = establishedOut.get(peer);
         if (established != null) established.disconnect();
     }
 
@@ -123,6 +123,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         Connection<T> put = establishedOut.put(conn.getPeer(), conn);
         if (put != null) throw new RuntimeException("Connection already exists in connection up");
 
+        logger.debug("Map: " + establishedOut);
         listener.deliverEvent(new OutConnectionUp(conn.getPeer()));
 
         for (T t : remove.getValue()) {
@@ -139,6 +140,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
     @Override
     protected void onOutboundConnectionDown(Connection<T> conn, Throwable cause) {
+        logger.debug("Outbound down: " + conn);
         Connection<T> remove = establishedOut.remove(conn.getPeer());
         if (remove == null) throw new RuntimeException("Connection down with no context available");
 
