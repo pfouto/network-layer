@@ -33,7 +33,7 @@ public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>>
 
     static {
         ACKOS_ATTRIBUTES = new Attributes();
-        ACKOS_ATTRIBUTES.putShort("channel", ACKOS_MAGIC_NUMBER);
+        ACKOS_ATTRIBUTES.putShort(CHANNEL_MAGIC_ATTRIBUTE, ACKOS_MAGIC_NUMBER);
     }
 
     public final static int DEFAULT_PORT = 13174;
@@ -185,7 +185,7 @@ public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>>
 
     @Override
     public boolean validateAttributes(Attributes attr) {
-        Short channel = attr.getShort("channel");
+        Short channel = attr.getShort(CHANNEL_MAGIC_ATTRIBUTE);
         return channel != null && channel == ACKOS_MAGIC_NUMBER;
     }
 }

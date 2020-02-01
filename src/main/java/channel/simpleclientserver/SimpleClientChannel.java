@@ -17,6 +17,8 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Properties;
 
+import static network.AttributeValidator.CHANNEL_MAGIC_ATTRIBUTE;
+
 public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
 
     private static final Logger logger = LogManager.getLogger(SimpleClientChannel.class);
@@ -26,7 +28,7 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
 
     static {
         SIMPLE_CLIENT_ATTRIBUTES = new Attributes();
-        SIMPLE_CLIENT_ATTRIBUTES.putShort("channel", SIMPLE_CLIENT_MAGIC_NUMBER);
+        SIMPLE_CLIENT_ATTRIBUTES.putShort(CHANNEL_MAGIC_ATTRIBUTE, SIMPLE_CLIENT_MAGIC_NUMBER);
     }
 
     public final static int DEFAULT_PORT = 13174;

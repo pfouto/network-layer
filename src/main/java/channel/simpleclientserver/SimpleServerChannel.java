@@ -113,7 +113,7 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
 
     @Override
     public boolean validateAttributes(Attributes attr) {
-        Short channel = attr.getShort("channel");
+        Short channel = attr.getShort(CHANNEL_MAGIC_ATTRIBUTE);
         return channel != null && channel == SIMPLE_CLIENT_MAGIC_NUMBER;
     }
 }
