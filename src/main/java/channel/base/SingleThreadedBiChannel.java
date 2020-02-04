@@ -63,4 +63,5 @@ public abstract class SingleThreadedBiChannel<T, Y> extends SingleThreadedChanne
     }
 
     protected abstract void onOutboundConnectionFailed(Connection<Y> conn, Throwable cause);
+
 }

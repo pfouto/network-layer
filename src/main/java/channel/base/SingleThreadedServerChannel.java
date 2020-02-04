@@ -41,4 +41,5 @@ public abstract class SingleThreadedServerChannel<T, Y> extends SingleThreadedCh
     }
 
     protected abstract void onServerSocketClose(boolean success, Throwable cause);
+
 }

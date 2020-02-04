@@ -34,4 +34,5 @@ public abstract class SingleThreadedClientChannel<T, Y> extends SingleThreadedCh
     }
 
     protected abstract void onOutboundConnectionFailed(Connection<Y> conn, Throwable cause);
+
 }

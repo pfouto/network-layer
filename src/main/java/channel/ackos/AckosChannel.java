@@ -14,6 +14,7 @@ import network.ISerializer;
 import network.NetworkManager;
 import network.data.Attributes;
 import network.data.Host;
+import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -86,7 +87,7 @@ public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>>
     }
 
     @Override
-    protected void onCloseConnection(Host peer) {
+    protected void onCloseConnection(Host peer, int connection) {
         Pair<Connection<AckosMessage<T>>, Queue<T>> remove = pendingConnections.remove(peer);
         if (remove != null) remove.getKey().disconnect();
 
@@ -181,6 +182,11 @@ public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>>
                 handleAppMessage((AckosAppMessage<T>) msg, conn);
                 break;
         }
+    }
+
+    @Override
+    protected void onOpenConnection(Host peer) {
+        throw new NotImplementedException("Pls fix me");
     }
 
     @Override
