@@ -208,8 +208,13 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
     @Override
     public void onDeliverMessage(T msg, Connection<T> conn) {
-        Host host = establishedIn.getKey(conn);
+        Host host;
+        if(conn.isInbound())
+            host = establishedIn.getKey(conn);
+        else
+            host = conn.getPeer();
         listener.deliverMessage(msg, host);
+
     }
 
     @Override
