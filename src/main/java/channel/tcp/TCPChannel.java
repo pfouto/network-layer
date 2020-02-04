@@ -12,6 +12,7 @@ import network.data.Attributes;
 import network.data.Host;
 import org.apache.commons.collections4.BidiMap;
 import org.apache.commons.collections4.bidimap.DualHashBidiMap;
+import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -116,7 +117,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     }
 
     @Override
-    protected void onCloseConnection(Host peer) {
+    protected void onCloseConnection(Host peer, int connection) {
         logger.debug("Disconnect to " + peer + " received");
         Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(peer);
         if (remove != null) remove.getKey().disconnect();
@@ -215,6 +216,11 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
             host = conn.getPeer();
         listener.deliverMessage(msg, host);
 
+    }
+
+    @Override
+    protected void onOpenConnection(Host peer) {
+        throw new NotImplementedException("Pls fix me");
     }
 
     @Override

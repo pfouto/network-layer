@@ -9,6 +9,7 @@ import network.ISerializer;
 import network.NetworkManager;
 import network.data.Attributes;
 import network.data.Host;
+import org.apache.commons.lang3.NotImplementedException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -85,7 +86,7 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
     }
 
     @Override
-    protected void onCloseConnection(Host peer) {
+    protected void onCloseConnection(Host peer, int connection) {
         throw new UnsupportedOperationException();
     }
 
@@ -113,5 +114,10 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
         logger.debug("Server con failed: " + conn + " ... " + cause);
         connection = null;
         listener.deliverEvent(new ServerFailedEvent(conn.getPeer(), cause));
+    }
+
+    @Override
+    protected void onOpenConnection(Host peer) {
+        throw new NotImplementedException("Pls fix me");
     }
 }

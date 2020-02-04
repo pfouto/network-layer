@@ -74,7 +74,7 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
     }
 
     @Override
-    protected void onCloseConnection(Host peer) {
+    protected void onCloseConnection(Host peer, int connection) {
         Connection<T> remove = clientConnections.remove(peer);
         if (remove != null) remove.disconnect();
     }
@@ -109,6 +109,11 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
     @Override
     public void onDeliverMessage(T msg, Connection<T> conn) {
         listener.deliverMessage(msg, conn.getPeer());
+    }
+
+    @Override
+    protected void onOpenConnection(Host peer) {
+        throw new UnsupportedOperationException("I am Server, not Client");
     }
 
     @Override
