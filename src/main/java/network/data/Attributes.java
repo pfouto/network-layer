@@ -45,6 +45,19 @@ public class Attributes {
         return attrMap.containsKey(key);
     }
 
+    public <T> void putObject(String key, T value, ISerializer<T> serializer) throws IOException {
+        ByteBuf buffer = Unpooled.buffer();
+        serializer.serialize(value, buffer);
+        attrMap.put(key, buffer.array());
+    }
+
+    public <T> T getObject(String key, ISerializer<T> serializer) throws IOException {
+        byte[] bytes = attrMap.get(key);
+        if (bytes == null) return null;
+        ByteBuf byteBuf = Unpooled.wrappedBuffer(bytes);
+        return serializer.deserialize(byteBuf);
+    }
+
     public void putBoolean(String key, boolean value) {
         attrMap.put(key, new byte[]{(byte) (value ? 1 : 0)});
     }

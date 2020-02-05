@@ -20,7 +20,6 @@ import org.apache.logging.log4j.Logger;
 import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.*;
 
 public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements AttributeValidator {
@@ -64,7 +63,6 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         if (properties.containsKey("port"))
             port = Integer.parseInt(properties.getProperty("port"));
 
-
         network = new NetworkManager<>(serializer, this, 1000, 3000, 1000);
 
         listenAddress = new Host(addr, port);
@@ -81,6 +79,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
     @Override
     protected void onSendMessage(T msg, Host peer, int mode) {
+        logger.debug("SendMessage " + msg + " " + peer + " " + (mode == MODE_IN ? "IN" : "OUT"));
         if (mode <= MODE_OUT) {
             Connection<T> established = establishedOut.get(peer);
             if (established != null) {
@@ -118,7 +117,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
     @Override
     protected void onCloseConnection(Host peer, int connection) {
-        logger.debug("Disconnect to " + peer + " received");
+        logger.debug("CloseConnection " + peer);
         Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(peer);
         if (remove != null) remove.getKey().disconnect();
 
@@ -128,9 +127,10 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
     @Override
     protected void onOutboundConnectionUp(Connection<T> conn) {
+        logger.debug("OutboundConnectionUp " + conn.getPeer());
+
         Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(conn.getPeer());
         if (remove == null) throw new RuntimeException("Pending null in connection up");
-        logger.debug("Outbound established: " + conn);
 
 
         Connection<T> put = establishedOut.put(conn.getPeer(), conn);
@@ -152,7 +152,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
     @Override
     protected void onOutboundConnectionDown(Connection<T> conn, Throwable cause) {
-        logger.debug("Outbound down: " + conn);
+        logger.debug("OutboundConnectionDown " + conn.getPeer() + (cause != null ? (" " + cause) : ""));
         Connection<T> remove = establishedOut.remove(conn.getPeer());
         if (remove == null) throw new RuntimeException("Connection down with no context available");
 
@@ -161,6 +161,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
     @Override
     protected void onOutboundConnectionFailed(Connection<T> conn, Throwable cause) {
+        logger.debug("OutboundConnectionFailed " + conn.getPeer() + (cause != null ? (" " + cause) : ""));
         if (establishedOut.containsKey(conn.getPeer()))
             throw new RuntimeException("Connection exists in conn failed");
 
@@ -180,8 +181,8 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
             con.disconnect();
             return;
         }
+        logger.debug("InboundConnectionUp " + clientSocket);
 
-        logger.debug("Inbound up: " + con + " " + clientSocket);
         if (establishedIn.putIfAbsent(clientSocket, con) != null)
             throw new RuntimeException("Double incoming connection from: " + con.getPeer());
         listener.deliverEvent(new InConnectionUp(clientSocket));
@@ -190,7 +191,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     @Override
     protected void onInboundConnectionDown(Connection<T> con, Throwable cause) {
         Host host = establishedIn.removeValue(con);
-        logger.debug("Inbound down: " + con + " " + host + " " + cause);
+        logger.debug("InboundConnectionDown " + host + (cause != null ? (" " + cause) : ""));
         listener.deliverEvent(new InConnectionDown(host, cause));
     }
 
@@ -214,8 +215,8 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
             host = establishedIn.getKey(conn);
         else
             host = conn.getPeer();
+        logger.debug("DeliverMessage " + msg + " " + host + " " + (conn.isInbound() ? "IN" : "OUT"));
         listener.deliverMessage(msg, host);
-
     }
 
     @Override
