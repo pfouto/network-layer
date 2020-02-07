@@ -17,7 +17,7 @@ public class ClientDownEvent extends SimpleClientServerEvent {
 
     @Override
     public String toString() {
-        return "ClientUpEvent{" +
+        return "ClientDownEvent{" +
                 "client=" + client +
                 '}';
     }
