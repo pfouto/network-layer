@@ -64,7 +64,7 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
     }
 
     @Override
-    protected void onSendMessage(T msg, Host peer, int mode) {
+    protected void onSendMessage(T msg, Host peer, int conn) {
         if (peer != null && !peer.equals(serverAddress)) {
             listener.messageFailed(msg, peer, new Exception("Invalid Host"));
             return;

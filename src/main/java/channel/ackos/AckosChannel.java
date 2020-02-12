@@ -70,7 +70,7 @@ public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>>
     }
 
     @Override
-    protected void onSendMessage(T msg, Host peer, int mode) {
+    protected void onSendMessage(T msg, Host peer, int connection) {
 
         OutConnectionContext<T> context = establishedConnections.get(peer);
         if (context != null) {

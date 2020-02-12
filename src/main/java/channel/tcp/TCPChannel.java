@@ -30,8 +30,8 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     public static final String LISTEN_ADDRESS_ATTRIBUTE = "listen_address";
 
     public final static int DEFAULT_PORT = 85739;
-    public final static int MODE_OUT = 0;
-    public final static int MODE_IN = 1;
+    public final static int CONNECTION_OUT = 0;
+    public final static int CONNECTION_IN = 1;
 
     private final NetworkManager<T> network;
     private final ChannelListener<T> listener;
@@ -41,11 +41,9 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     private Map<Host, Pair<Connection<T>, Queue<T>>> pendingOut;
     private Map<Host, Connection<T>> establishedOut;
 
-    //Host represents the client server socket, not the client connection!
-    //client connection is in connection.getPeer
+    //Host represents the client server socket, not the client tcp connection address!
+    //client connection address is in connection.getPeer
     private BidiMap<Host, Connection<T>> establishedIn;
-
-    private Host listenAddress;
 
     public TCPChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties)
             throws IOException {
@@ -65,7 +63,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
         network = new NetworkManager<>(serializer, this, 1000, 3000, 1000);
 
-        listenAddress = new Host(addr, port);
+        Host listenAddress = new Host(addr, port);
         network.createServerSocket(this, listenAddress, this);
 
         attributes = new Attributes();
@@ -78,41 +76,53 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     }
 
     @Override
-    protected void onSendMessage(T msg, Host peer, int mode) {
-        logger.debug("SendMessage " + msg + " " + peer + " " + (mode == MODE_IN ? "IN" : "OUT"));
-        if (mode <= MODE_OUT) {
+    protected void onOpenConnection(Host peer) {
+        throw new NotImplementedException("Pls fix me");
+    }
+
+
+    @Override
+    protected void onSendMessage(T msg, Host peer, int connection) {
+        logger.debug("SendMessage " + msg + " " + peer + " " + (connection == CONNECTION_IN ? "IN" : "OUT"));
+        if (connection <= CONNECTION_OUT) {
             Connection<T> established = establishedOut.get(peer);
             if (established != null) {
-                Promise<Void> promise = loop.newPromise();
-                promise.addListener(future -> {
-                    if (!future.isSuccess())
-                        listener.messageFailed(msg, peer, future.cause());
-                    else
-                        listener.messageSent(msg, peer);
-                });
-                established.sendMessage(msg, promise);
+                sendWithListener(msg, peer, established);
             } else {
                 Pair<Connection<T>, Queue<T>> pair = pendingOut.computeIfAbsent(peer, k ->
                         Pair.of(network.createConnection(peer, attributes, this), new LinkedList<>()));
                 pair.getValue().add(msg);
             }
-        } else if (mode == MODE_IN) {
+        } else if (connection == CONNECTION_IN) {
             Connection<T> inConn = establishedIn.get(peer);
-            if (inConn != null) {
-                Promise<Void> promise = loop.newPromise();
-                promise.addListener(future -> {
-                    if (!future.isSuccess())
-                        listener.messageFailed(msg, peer, future.cause());
-                    else
-                        listener.messageSent(msg, peer);
-                });
-                inConn.sendMessage(msg, promise);
-            } else {
-                logger.error("Unable to send message, no incoming connection from " + peer + " - " + msg);
-            }
+            if (inConn != null)
+                sendWithListener(msg, peer, inConn);
+            else
+                listener.messageFailed(msg, peer, new IllegalArgumentException("No incoming connection"));
         } else {
-            logger.error("Invalid sendMessage mode " + mode);
+            listener.messageFailed(msg, peer, new IllegalArgumentException("Invalid send channel: " + connection));
+            logger.error("Invalid sendMessage mode " + connection);
         }
+    }
+
+    private void sendWithListener(T msg, Host peer, Connection<T> established) {
+        Promise<Void> promise = loop.newPromise();
+        promise.addListener(future -> {
+            if (future.isSuccess()) listener.messageSent(msg, peer);
+            else listener.messageFailed(msg, peer, future.cause());
+        });
+        established.sendMessage(msg, promise);
+    }
+
+    @Override
+    protected void onOutboundConnectionUp(Connection<T> conn) {
+        logger.debug("OutboundConnectionUp " + conn.getPeer());
+        Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(conn.getPeer());
+        if (remove == null) throw new RuntimeException("Pending null in connection up");
+        Connection<T> put = establishedOut.put(conn.getPeer(), conn);
+        if (put != null) throw new RuntimeException("Connection already exists in connection up");
+        listener.deliverEvent(new OutConnectionUp(conn.getPeer()));
+        remove.getValue().forEach(t -> sendWithListener(t, conn.getPeer(), conn));
     }
 
     @Override
@@ -123,31 +133,6 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
         Connection<T> established = establishedOut.get(peer);
         if (established != null) established.disconnect();
-    }
-
-    @Override
-    protected void onOutboundConnectionUp(Connection<T> conn) {
-        logger.debug("OutboundConnectionUp " + conn.getPeer());
-
-        Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(conn.getPeer());
-        if (remove == null) throw new RuntimeException("Pending null in connection up");
-
-
-        Connection<T> put = establishedOut.put(conn.getPeer(), conn);
-        if (put != null) throw new RuntimeException("Connection already exists in connection up");
-
-        listener.deliverEvent(new OutConnectionUp(conn.getPeer()));
-
-        for (T t : remove.getValue()) {
-            Promise<Void> promise = loop.newPromise();
-            promise.addListener(future -> {
-                if (!future.isSuccess())
-                    listener.messageFailed(t, conn.getPeer(), future.cause());
-                else
-                    listener.messageSent(t, conn.getPeer());
-            });
-            conn.sendMessage(t, promise);
-        }
     }
 
     @Override
@@ -211,17 +196,12 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     @Override
     public void onDeliverMessage(T msg, Connection<T> conn) {
         Host host;
-        if(conn.isInbound())
+        if (conn.isInbound())
             host = establishedIn.getKey(conn);
         else
             host = conn.getPeer();
         logger.debug("DeliverMessage " + msg + " " + host + " " + (conn.isInbound() ? "IN" : "OUT"));
         listener.deliverMessage(msg, host);
-    }
-
-    @Override
-    protected void onOpenConnection(Host peer) {
-        throw new NotImplementedException("Pls fix me");
     }
 
     @Override
