@@ -91,7 +91,7 @@ public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>>
         Pair<Connection<AckosMessage<T>>, Queue<T>> remove = pendingConnections.remove(peer);
         if (remove != null) remove.getKey().disconnect();
 
-        OutConnectionContext<T> context = establishedConnections.remove(peer);
+        OutConnectionContext<T> context = establishedConnections.get(peer);
         if (context != null) context.getConnection().disconnect();
     }
 
