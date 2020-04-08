@@ -3,6 +3,14 @@ package network;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
+import io.netty.channel.epoll.Epoll;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.epoll.EpollServerSocketChannel;
+import io.netty.channel.epoll.EpollSocketChannel;
+import io.netty.channel.kqueue.KQueue;
+import io.netty.channel.kqueue.KQueueEventLoopGroup;
+import io.netty.channel.kqueue.KQueueServerSocketChannel;
+import io.netty.channel.kqueue.KQueueSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -32,16 +40,47 @@ public class NetworkManager<T> {
     private final MessageListener<T> consumer;
     private final int hbInterval;
     private final int hbTolerance;
-    private final int connectTimeout;
+
+    static final Class<? extends Channel> channelClass;
+    static final Class<? extends ServerChannel> serverChannelClass;
+
+    static {
+        if (Epoll.isAvailable()) {
+            channelClass = EpollSocketChannel.class;
+            serverChannelClass = EpollServerSocketChannel.class;
+        } else if (KQueue.isAvailable()) {
+            channelClass = KQueueSocketChannel.class;
+            serverChannelClass = KQueueServerSocketChannel.class;
+        } else {
+            channelClass = NioSocketChannel.class;
+            serverChannelClass = NioServerSocketChannel.class;
+        }
+    }
 
     public NetworkManager(ISerializer<T> serializer, MessageListener<T> consumer,
                           int hbInterval, int hbTolerance, int connectTimeout) {
-        clientBootstrap = setupClientBootstrap();
+        //Default number of threads for worker groups is (from netty) number of core * 2
+        this(serializer, consumer, hbInterval, hbTolerance, connectTimeout, 0);
+    }
+
+    public NetworkManager(ISerializer<T> serializer, MessageListener<T> consumer,
+                          int hbInterval, int hbTolerance, int connectTimeout, int nWorkerThreads) {
+        this(serializer, consumer, hbInterval, hbTolerance, connectTimeout, createNewWorkerGroup(nWorkerThreads));
+    }
+
+    public NetworkManager(ISerializer<T> serializer, MessageListener<T> consumer,
+                          int hbInterval, int hbTolerance, int connectTimeout, EventLoopGroup workerGroup) {
         this.serializer = serializer;
         this.consumer = consumer;
         this.hbInterval = hbInterval;
         this.hbTolerance = hbTolerance;
-        this.connectTimeout = connectTimeout;
+        this.workerGroup = workerGroup;
+
+        this.clientBootstrap = new Bootstrap()
+                .channel(channelClass)
+                .option(ChannelOption.SO_KEEPALIVE, true)
+                .option(ChannelOption.TCP_NODELAY, true)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeout);
     }
 
     public Connection<T> createConnection(Host peer, Attributes attrs, OutConnListener<T> listener) {
@@ -49,18 +88,39 @@ public class NetworkManager<T> {
                 serializer, workerGroup.next(), attrs, hbInterval, hbTolerance);
     }
 
-    public void createServerSocket(InConnListener<T> listener, Host listenIPAndPort, AttributeValidator validator) {
+    public void createServerSocket(InConnListener<T> listener, Host listenAddr, AttributeValidator validator,
+                                   int childThreads) {
+        createServerSocket(listener, listenAddr, validator, childThreads, 1);
+    }
+
+    public void createServerSocket(InConnListener<T> listener, Host listenAddr, AttributeValidator validator) {
+        createServerSocket(listener, listenAddr, validator, 0, 1);
+    }
+
+    public void createServerSocket(InConnListener<T> listener, Host listenAddr, AttributeValidator validator,
+                                   int childThreads, int parentThreads) {
+        createServerSocket(listener, listenAddr, validator, createNewWorkerGroup(childThreads),
+                createNewWorkerGroup(parentThreads));
+    }
+
+    public void createServerSocket(InConnListener<T> listener, Host listenAddr, AttributeValidator validator,
+                                   EventLoopGroup childGroup) {
+        createServerSocket(listener, listenAddr, validator, childGroup, createNewWorkerGroup(1));
+    }
+
+    public void createServerSocket(InConnListener<T> listener, Host listenAddr, AttributeValidator validator,
+                                   EventLoopGroup childGroup, EventLoopGroup parentGroup) {
+        //Default number of threads for boss group is 1
         if (serverChannel != null) return;
 
         //TODO change groups options
-        EventLoopGroup workerGroup = new NioEventLoopGroup();
         ServerBootstrap b = new ServerBootstrap();
-        b.group(workerGroup).channel(NioServerSocketChannel.class);
+        b.group(parentGroup, childGroup).channel(serverChannelClass);
+
         b.childHandler(new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
-                ch.pipeline().addLast("IdleStateHandler",
-                        new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
+                ch.pipeline().addLast("IdleHandler", new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
                 ch.pipeline().addLast("MessageDecoder", new MessageDecoder<>(serializer));
                 ch.pipeline().addLast("MessageEncoder", new MessageEncoder<>(serializer));
                 ch.pipeline().addLast("InHandshakeHandler", new InHandshakeHandler(validator));
@@ -73,27 +133,18 @@ public class NetworkManager<T> {
         b.childOption(ChannelOption.TCP_NODELAY, true);
 
         try {
-            serverChannel = b.bind(listenIPAndPort.getAddress(), listenIPAndPort.getPort()).addListener(cf -> {
-                listener.serverSocketBind(cf.isSuccess(), cf.cause());
-            }).channel();
+            serverChannel = b.bind(listenAddr.getAddress(), listenAddr.getPort()).addListener(
+                    cf -> listener.serverSocketBind(cf.isSuccess(), cf.cause())).channel();
 
-            serverChannel.closeFuture().addListener(cf -> {
-                listener.serverSocketClose(cf.isSuccess(), cf.cause());
-            });
+            serverChannel.closeFuture().addListener(cf -> listener.serverSocketClose(cf.isSuccess(), cf.cause()));
         } catch (Exception e) {
             listener.serverSocketBind(false, e);
         }
     }
 
-    private Bootstrap setupClientBootstrap() {
-        //TODO support custom groups
-        workerGroup = new NioEventLoopGroup();
-        Bootstrap newClientBootstrap = new Bootstrap();
-        newClientBootstrap.channel(NioSocketChannel.class);
-        //TODO maybe change options
-        newClientBootstrap.option(ChannelOption.SO_KEEPALIVE, true);
-        newClientBootstrap.option(ChannelOption.TCP_NODELAY, true);
-        newClientBootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeout);
-        return newClientBootstrap;
+    public static EventLoopGroup createNewWorkerGroup(int nThreads) {
+        if (Epoll.isAvailable()) return new EpollEventLoopGroup(nThreads);
+        else if (KQueue.isAvailable()) return new KQueueEventLoopGroup(nThreads);
+        else return new NioEventLoopGroup(nThreads);
     }
 }
