@@ -78,4 +78,9 @@ public abstract class ConnectionHandler<T> extends ChannelDuplexHandler implemen
     public boolean isOutbound(){
         return !incoming;
     }
+
+    @Override
+    public EventLoop getLoop() {
+        return loop;
+    }
 }

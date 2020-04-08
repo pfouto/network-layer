@@ -47,8 +47,7 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
         this.clientBootstrap.handler(new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
-                ch.pipeline().addLast("IdleStateHandler", new IdleStateHandler(hbTolerance,
-                        hbInterval, 0, MILLISECONDS));
+                ch.pipeline().addLast("IdleHandler", new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
                 ch.pipeline().addLast("MessageDecoder", new MessageDecoder<>(serializer));
                 ch.pipeline().addLast("MessageEncoder", new MessageEncoder<>(serializer));
                 ch.pipeline().addLast("OutHandshakeHandler", new OutHandshakeHandler(attributes));
@@ -84,7 +83,7 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
             if (state == State.CONNECTED) {
                 logger.debug("Writing " + msg + " to outChannel of " + peer);
                 ChannelFuture future = channel.writeAndFlush(new NetworkMessage(NetworkMessage.APP_MSG, msg));
-                if(promise != null) future.addListener(new PromiseNotifier<>(promise));
+                if (promise != null) future.addListener(new PromiseNotifier<>(promise));
             } else
                 logger.error("Writing message " + msg + " to channel " + peer + " in unprepared state " + state);
         });
