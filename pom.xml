@@ -29,7 +29,7 @@
         <repository>
             <id>github</id>
             <name>GitHub pfouto Apache Maven Packages</name>
-            <url>https://maven.pkg.github.com/pfouto/network-layer</url>
+            <url>https://maven.pkg.github.com/pfouto/babel-core</url>
         </repository>
     </distributionManagement>
 
@@ -60,5 +60,5 @@
             <version>4.4</version>
         </dependency>
     </dependencies>
-    
+
 </project>
