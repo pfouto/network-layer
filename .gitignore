@@ -77,6 +77,7 @@ local.properties
 
 #custom
 .idea
+.idea/*
 
 # User-specific stuff
 .idea/**/workspace.xml
