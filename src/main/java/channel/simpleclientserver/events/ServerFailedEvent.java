@@ -4,7 +4,7 @@ import network.data.Host;
 
 public class ServerFailedEvent extends SimpleClientServerEvent {
 
-    public static final short EVENT_ID = 204;
+    public static final short EVENT_ID = 205;
 
     private final Host server;
     private final Throwable cause;
