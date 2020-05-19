@@ -80,10 +80,10 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         throw new NotImplementedException("Pls fix me");
     }
 
-
     @Override
     protected void onSendMessage(T msg, Host peer, int connection) {
-        logger.debug("SendMessage " + msg + " " + peer + " " + (connection == CONNECTION_IN ? "IN" : "OUT"));
+        logger.debug("SendMessage " + msg + " " + peer + " " +
+                (connection == CONNECTION_IN ? "IN" : "OUT"));
         if (connection <= CONNECTION_OUT) {
             Connection<T> established = establishedOut.get(peer);
             if (established != null) {
@@ -100,7 +100,8 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
             else
                 listener.messageFailed(msg, peer, new IllegalArgumentException("No incoming connection"));
         } else {
-            listener.messageFailed(msg, peer, new IllegalArgumentException("Invalid send channel: " + connection));
+            listener.messageFailed(msg, peer,
+                    new IllegalArgumentException("Invalid connection: " + connection));
             logger.error("Invalid sendMessage mode " + connection);
         }
     }
@@ -118,11 +119,14 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     protected void onOutboundConnectionUp(Connection<T> conn) {
         logger.debug("OutboundConnectionUp " + conn.getPeer());
         Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(conn.getPeer());
-        if (remove == null) throw new RuntimeException("Pending null in connection up");
-        Connection<T> put = establishedOut.put(conn.getPeer(), conn);
-        if (put != null) throw new RuntimeException("Connection already exists in connection up");
-        listener.deliverEvent(new OutConnectionUp(conn.getPeer()));
-        remove.getValue().forEach(t -> sendWithListener(t, conn.getPeer(), conn));
+        if (remove != null) {
+            Connection<T> put = establishedOut.put(conn.getPeer(), conn);
+            if (put != null) throw new RuntimeException("Connection already exists in connection up");
+            listener.deliverEvent(new OutConnectionUp(conn.getPeer()));
+            remove.getValue().forEach(t -> sendWithListener(t, conn.getPeer(), conn));
+        } else {
+            logger.warn("Pending null in connection up: " + conn);
+        }
     }
 
     @Override

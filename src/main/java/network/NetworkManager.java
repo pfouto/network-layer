@@ -147,4 +147,7 @@ public class NetworkManager<T> {
         else if (KQueue.isAvailable()) return new KQueueEventLoopGroup(nThreads);
         else return new NioEventLoopGroup(nThreads);
     }
+    public static EventLoopGroup createNewWorkerGroup() {
+        return createNewWorkerGroup(0);
+    }
 }

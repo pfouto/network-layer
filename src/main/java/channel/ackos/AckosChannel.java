@@ -98,18 +98,21 @@ public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>>
     @Override
     protected void onOutboundConnectionUp(Connection<AckosMessage<T>> conn) {
         Pair<Connection<AckosMessage<T>>, Queue<T>> remove = pendingConnections.remove(conn.getPeer());
-        if (remove == null) throw new RuntimeException("Pending null in connection up");
-        logger.debug("Outbound established: " + conn);
-        OutConnectionContext<T> ctx = new OutConnectionContext<>(conn);
-        OutConnectionContext<T> put = establishedConnections.put(conn.getPeer(), ctx);
-        if (put != null) throw new RuntimeException("Context exists in connection up");
+        if (remove != null) {
+            logger.debug("Outbound established: " + conn);
+            OutConnectionContext<T> ctx = new OutConnectionContext<>(conn);
+            OutConnectionContext<T> put = establishedConnections.put(conn.getPeer(), ctx);
+            if (put != null) throw new RuntimeException("Context exists in connection up");
 
-        for (T t : remove.getValue()) {
-            Promise<Void> promise = loop.newPromise();
-            promise.addListener(future -> {
-                if (!future.isSuccess()) listener.messageFailed(t, conn.getPeer(), future.cause());
-            });
-            ctx.sendMessage(t, promise);
+            for (T t : remove.getValue()) {
+                Promise<Void> promise = loop.newPromise();
+                promise.addListener(future -> {
+                    if (!future.isSuccess()) listener.messageFailed(t, conn.getPeer(), future.cause());
+                });
+                ctx.sendMessage(t, promise);
+            }
+        } else {
+            logger.warn("Pending null in connection up: " + conn);
         }
     }
 

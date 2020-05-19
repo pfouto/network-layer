@@ -4,6 +4,7 @@ import channel.ChannelListener;
 import channel.base.SingleThreadedServerChannel;
 import channel.simpleclientserver.events.ClientDownEvent;
 import channel.simpleclientserver.events.ClientUpEvent;
+import io.netty.channel.EventLoopGroup;
 import io.netty.util.concurrent.Promise;
 import network.AttributeValidator;
 import network.Connection;
@@ -27,6 +28,11 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
 
     public final static int DEFAULT_PORT = 13174;
 
+    public final static String NAME = "SimpleServerChannel";
+    public final static String ADDRESS_KEY = "address";
+    public final static String PORT_KEY = "port";
+    public final static String WORKER_GROUP_KEY = "workerGroup";
+
     private final NetworkManager<T> network;
     private final ChannelListener<T> listener;
 
@@ -35,24 +41,29 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
 
     public SimpleServerChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties)
             throws UnknownHostException {
-        super("SimpleServerChannel");
+        super(NAME);
 
         this.listener = list;
         this.clientConnections = new HashMap<>();
 
-        InetAddress addr = null;
-        if (properties.containsKey("address"))
-            addr = Inet4Address.getByName(properties.getProperty("address"));
+        InetAddress addr;
+        if (properties.containsKey(ADDRESS_KEY))
+            addr = Inet4Address.getByName(properties.getProperty(ADDRESS_KEY));
+        else
+            throw new IllegalArgumentException(NAME + " requires binding address");
 
-        int port = DEFAULT_PORT;
-        if (properties.containsKey("port"))
-            port = Integer.parseInt(properties.getProperty("port"));
+        int port = properties.containsKey(PORT_KEY) ?
+                Integer.parseInt(properties.getProperty(PORT_KEY)) :
+                DEFAULT_PORT;
 
-        network = new NetworkManager<>(serializer, this,
-                1000, 3000, 1000);
-
-        if (addr != null)
+        if (properties.containsKey(WORKER_GROUP_KEY)) {
+            network = new NetworkManager<>(serializer, this, 1000, 3000, 1000, null);
+            network.createServerSocket(this, new Host(addr, port), this,
+                    (EventLoopGroup) properties.get(WORKER_GROUP_KEY));
+        } else {
+            network = new NetworkManager<>(serializer, this, 1000, 3000, 1000, null);
             network.createServerSocket(this, new Host(addr, port), this);
+        }
 
     }
 

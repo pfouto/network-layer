@@ -2,7 +2,6 @@ package channel.tcp;
 
 import channel.ChannelListener;
 import channel.IChannel;
-import channel.base.SingleThreadedBiChannel;
 import channel.tcp.events.*;
 import io.netty.channel.EventLoop;
 import io.netty.channel.EventLoopGroup;
@@ -18,7 +17,6 @@ import network.listeners.MessageListener;
 import network.listeners.OutConnListener;
 import org.apache.commons.collections4.BidiMap;
 import org.apache.commons.collections4.bidimap.DualHashBidiMap;
-import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -26,21 +24,25 @@ import org.apache.logging.log4j.Logger;
 import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
-import java.util.*;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 /***
- * Multithreaded channel without send buffers.
- * Usage: Call openConnection, and only when a OutConnectionUp event is received it is safe to use sendMessage.
- * Calling sendMessage immediately after openConnection will likely result in a messageFailed event, as the connection
- * is not yet established.
+ * Multithreaded channel with explicit openConnection.
  */
 public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<T>, InConnListener<T>,
         OutConnListener<T>, AttributeValidator {
 
     private static final Logger logger = LogManager.getLogger(MultithreadedTCPChannel.class);
     private static final short TCP_MAGIC_NUMBER = 0x4505;
+
+    public final static String NAME = "MultithreadedTCPChannel";
+    public final static String ADDRESS_KEY = "address";
+    public final static String PORT_KEY = "port";
+    public final static String WORKER_GROUP_KEY = "workerGroup";
 
     public static final String LISTEN_ADDRESS_ATTRIBUTE = "listen_address";
 
@@ -53,7 +55,7 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
 
     private Attributes attributes;
 
-    private Map<Host, Connection<T>> pendingOut;
+    private Map<Host, Pair<Connection<T>, Queue<T>>> pendingOut;
     private Map<Host, Connection<T>> establishedOut;
 
     //Host represents the client server socket, not the client tcp connection address!
@@ -65,22 +67,23 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
 
         this.listener = list;
 
-        InetAddress addr = null;
-        if (properties.containsKey("address"))
-            addr = Inet4Address.getByName(properties.getProperty("address"));
+        InetAddress addr;
+        if (properties.containsKey(ADDRESS_KEY))
+            addr = Inet4Address.getByName(properties.getProperty(ADDRESS_KEY));
+        else
+            throw new IllegalArgumentException(NAME + " requires binding address");
 
-        if (addr == null)
-            throw new AssertionError("No address received in TCP Channel properties");
+        int port = properties.containsKey(PORT_KEY) ?
+                Integer.parseInt(properties.getProperty(PORT_KEY)) :
+                DEFAULT_PORT;
 
-        int port = DEFAULT_PORT;
-        if (properties.containsKey("port"))
-            port = Integer.parseInt(properties.getProperty("port"));
-
-        EventLoopGroup workerGroup = NetworkManager.createNewWorkerGroup(0);
         Host listenAddress = new Host(addr, port);
 
-        network = new NetworkManager<>(serializer, this, 1000, 3000, 1000, workerGroup);
-        network.createServerSocket(this, listenAddress, this, workerGroup);
+        EventLoopGroup eventExecutors = properties.containsKey(WORKER_GROUP_KEY) ?
+                (EventLoopGroup) properties.get(WORKER_GROUP_KEY) :
+                NetworkManager.createNewWorkerGroup(0);
+        network = new NetworkManager<>(serializer, this, 1000, 3000, 1000, eventExecutors);
+        network.createServerSocket(this, new Host(addr, port), this, eventExecutors);
 
         attributes = new Attributes();
         attributes.putShort(CHANNEL_MAGIC_ATTRIBUTE, TCP_MAGIC_NUMBER);
@@ -94,7 +97,8 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
     @Override
     public void openConnection(Host peer) {
         if (establishedOut.containsKey(peer)) return;
-        pendingOut.computeIfAbsent(peer, k -> network.createConnection(peer, attributes, this));
+        pendingOut.computeIfAbsent(peer, k ->
+                Pair.of(network.createConnection(peer, attributes, this), new LinkedList<>()));
     }
 
     @Override
@@ -129,8 +133,8 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
     @Override
     public void closeConnection(Host peer, int connection) {
         logger.debug("CloseConnection " + peer);
-        Connection<T> remove = pendingOut.remove(peer);
-        if (remove != null) remove.disconnect();
+        Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(peer);
+        if (remove != null) remove.getKey().disconnect();
 
         Connection<T> established = establishedOut.get(peer);
         if (established != null) established.disconnect();
@@ -141,12 +145,16 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
     public void outboundConnectionUp(Connection<T> conn) {
         assert conn.getLoop().inEventLoop();
         logger.debug("OutboundConnectionUp " + conn.getPeer());
-        Connection<T> put = establishedOut.put(conn.getPeer(), conn);
-        if (put != null) throw new RuntimeException("Connection already exists in connection up");
-        Connection<T> remove = pendingOut.remove(conn.getPeer());
-        if (remove == null) throw new RuntimeException("Pending null in connection up");
-        if (remove != conn) throw new RuntimeException("Reference mismatch");
-        listener.deliverEvent(new OutConnectionUp(conn.getPeer()));
+        Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(conn.getPeer());
+        if (remove != null) {
+            if (remove.getKey() != conn) throw new RuntimeException("Reference mismatch");
+            Connection<T> put = establishedOut.put(conn.getPeer(), conn);
+            if (put != null) throw new RuntimeException("Connection already exists in connection up");
+            listener.deliverEvent(new OutConnectionUp(conn.getPeer()));
+            remove.getValue().forEach(t -> sendWithListener(t, conn.getPeer(), conn));
+        } else {
+            logger.warn("Pending null in connection up: " + conn);
+        }
     }
 
     @Override
@@ -166,10 +174,10 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
         if (establishedOut.containsKey(conn.getPeer()))
             throw new RuntimeException("Connection exists in conn failed");
 
-        Connection<T> remove = pendingOut.remove(conn.getPeer());
+        Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(conn.getPeer());
         if (remove == null) throw new RuntimeException("Connection failed with no pending");
 
-        listener.deliverEvent(new OutConnectionFailed<>(conn.getPeer(), null, cause));
+        listener.deliverEvent(new OutConnectionFailed<>(conn.getPeer(), remove.getRight(), cause));
     }
 
     @Override

@@ -19,6 +19,7 @@ public class ClientDownEvent extends SimpleClientServerEvent {
     public String toString() {
         return "ClientDownEvent{" +
                 "client=" + client +
+                ", cause=" + cause +
                 '}';
     }
 
