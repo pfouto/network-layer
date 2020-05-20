@@ -125,7 +125,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
             listener.deliverEvent(new OutConnectionUp(conn.getPeer()));
             remove.getValue().forEach(t -> sendWithListener(t, conn.getPeer(), conn));
         } else {
-            logger.warn("Pending null in connection up: " + conn);
+            logger.warn("ConnectionUp with no pending: " + conn);
         }
     }
 
@@ -143,9 +143,11 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     protected void onOutboundConnectionDown(Connection<T> conn, Throwable cause) {
         logger.debug("OutboundConnectionDown " + conn.getPeer() + (cause != null ? (" " + cause) : ""));
         Connection<T> remove = establishedOut.remove(conn.getPeer());
-        if (remove == null) throw new RuntimeException("Connection down with no context available");
-
-        listener.deliverEvent(new OutConnectionDown(conn.getPeer(), cause));
+        if (remove != null) {
+            listener.deliverEvent(new OutConnectionDown(conn.getPeer(), cause));
+        } else {
+            logger.warn("ConnectionDown with no context available: " + conn);
+        }
     }
 
     @Override
@@ -155,9 +157,11 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
             throw new RuntimeException("Connection exists in conn failed");
 
         Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(conn.getPeer());
-        if (remove == null) throw new RuntimeException("Connection failed with no pending");
-
-        listener.deliverEvent(new OutConnectionFailed<>(conn.getPeer(), remove.getRight(), cause));
+        if (remove != null) {
+            listener.deliverEvent(new OutConnectionFailed<>(conn.getPeer(), remove.getRight(), cause));
+        } else {
+            logger.warn("ConnectionFailed with no pending: " + conn);
+        }
     }
 
     @Override

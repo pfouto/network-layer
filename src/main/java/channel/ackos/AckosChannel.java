@@ -112,18 +112,19 @@ public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>>
                 ctx.sendMessage(t, promise);
             }
         } else {
-            logger.warn("Pending null in connection up: " + conn);
+            logger.warn("ConnectionUp with no pending: " + conn);
         }
     }
 
     @Override
     protected void onOutboundConnectionDown(Connection<AckosMessage<T>> conn, Throwable cause) {
         OutConnectionContext<T> context = establishedConnections.remove(conn.getPeer());
-        if (context == null) throw new RuntimeException("Connection down with no context available");
-
-        List<T> failed = context.getPending().stream().map(Pair::getValue).collect(Collectors.toList());
-
-        listener.deliverEvent(new NodeDownEvent<>(conn.getPeer(), failed, cause));
+        if (context != null) {
+            List<T> failed = context.getPending().stream().map(Pair::getValue).collect(Collectors.toList());
+            listener.deliverEvent(new NodeDownEvent<>(conn.getPeer(), failed, cause));
+        } else {
+            logger.warn("ConnectionDown with no context available: " + conn);
+        }
     }
 
     @Override
@@ -132,10 +133,12 @@ public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>>
             throw new RuntimeException("Context exists in conn failed");
 
         Pair<Connection<AckosMessage<T>>, Queue<T>> remove = pendingConnections.remove(conn.getPeer());
-        if (remove == null) throw new RuntimeException("Connection failed with no pending");
-
-        List<T> failed = new LinkedList<>(remove.getRight());
-        listener.deliverEvent(new NodeDownEvent<>(conn.getPeer(), failed, cause));
+        if (remove != null) {
+            List<T> failed = new LinkedList<>(remove.getRight());
+            listener.deliverEvent(new NodeDownEvent<>(conn.getPeer(), failed, cause));
+        } else {
+            logger.warn("ConnectionFailed with no pending: " + conn);
+        }
     }
 
     private void handleAckMessage(AckosAckMessage<T> msg, Connection<AckosMessage<T>> conn) {
