@@ -60,7 +60,7 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
 
     //Host represents the client server socket, not the client tcp connection address!
     //client connection address is in connection.getPeer
-    private BidiMap<Host, Connection<T>> establishedIn;
+    private final BidiMap<Host, Connection<T>> establishedIn;
 
     public MultithreadedTCPChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties)
             throws IOException {
@@ -106,8 +106,13 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
         logger.debug("SendMessage " + msg + " " + peer + " " + (connection == CONNECTION_IN ? "IN" : "OUT"));
         if (connection <= CONNECTION_OUT) {
             Connection<T> established = establishedOut.get(peer);
-            if (established != null) sendWithListener(msg, peer, established);
-            else listener.messageFailed(msg, peer, new IllegalArgumentException("No outgoing connection to peer."));
+            Pair<Connection<T>, Queue<T>> pending;
+            if (established != null)
+                sendWithListener(msg, peer, established);
+            else if ((pending = pendingOut.get(peer)) != null)
+                pending.getValue().add(msg);
+            else
+                listener.messageFailed(msg, peer, new IllegalArgumentException("No outgoing connection to peer."));
         } else if (connection == CONNECTION_IN) {
             Connection<T> inConn = establishedIn.get(peer);
             if (inConn != null) sendWithListener(msg, peer, inConn);
@@ -203,15 +208,23 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
 
         logger.debug("InboundConnectionUp " + clientSocket);
 
-        if (establishedIn.putIfAbsent(clientSocket, con) != null)
+        Connection<T> old;
+        synchronized (establishedIn) {
+            old = establishedIn.putIfAbsent(clientSocket, con);
+        }
+        if (old != null)
             throw new RuntimeException("Double incoming connection from: " + clientSocket + " (" + con.getPeer() + ")");
+
         listener.deliverEvent(new InConnectionUp(clientSocket));
     }
 
     @Override
     public void inboundConnectionDown(Connection<T> conn, Throwable cause) {
         assert conn.getLoop().inEventLoop();
-        Host host = establishedIn.removeValue(conn);
+        Host host;
+        synchronized (establishedIn) {
+            host = establishedIn.removeValue(conn);
+        }
         logger.debug("InboundConnectionDown " + host + (cause != null ? (" " + cause) : ""));
         listener.deliverEvent(new InConnectionDown(host, cause));
     }
@@ -220,9 +233,11 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
     public void deliverMessage(T msg, Connection<T> conn) {
         assert conn.getLoop().inEventLoop();
         Host host;
-        if (conn.isInbound())
+        if (conn.isInbound()) {
             host = establishedIn.getKey(conn);
-        else
+            if (host == null)
+                throw new AssertionError("Null host");
+        } else
             host = conn.getPeer();
         logger.debug("DeliverMessage " + msg + " " + host + " " + (conn.isInbound() ? "IN" : "OUT"));
         listener.deliverMessage(msg, host);
