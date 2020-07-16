@@ -19,7 +19,7 @@ public abstract class ConnectionHandler<T> extends ChannelDuplexHandler implemen
     private static final Logger logger = LogManager.getLogger(ConnectionHandler.class);
 
     Host peer;
-    Attributes attributes;
+    Attributes peerAttributes;
     Channel channel;
     EventLoop loop;
     private final MessageListener<T> consumer;
@@ -67,8 +67,8 @@ public abstract class ConnectionHandler<T> extends ChannelDuplexHandler implemen
         return peer;
     }
 
-    public final Attributes getAttributes() {
-        return attributes;
+    public final Attributes getPeerAttributes() {
+        return peerAttributes;
     }
 
     public boolean isInbound(){

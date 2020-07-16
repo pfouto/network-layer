@@ -2,6 +2,7 @@ package network.pipeline;
 
 import io.netty.channel.*;
 import network.AttributeValidator;
+import network.data.Attributes;
 import network.messaging.NetworkMessage;
 import network.messaging.control.ControlMessage;
 import network.messaging.control.FirstHandshakeMessage;
@@ -15,10 +16,12 @@ public class InHandshakeHandler extends ChannelDuplexHandler {
 
     private static final Logger logger = LogManager.getLogger(InHandshakeHandler.class);
 
-    private AttributeValidator validator;
+    private final AttributeValidator validator;
+    private final Attributes myAttrs;
 
-    public InHandshakeHandler(AttributeValidator validator) {
+    public InHandshakeHandler(AttributeValidator validator, Attributes myAttrs) {
         this.validator = validator;
+        this.myAttrs = myAttrs;
     }
 
     @Override
@@ -38,7 +41,7 @@ public class InHandshakeHandler extends ChannelDuplexHandler {
 
         FirstHandshakeMessage fhm = (FirstHandshakeMessage) cMsg;
         if(validator.validateAttributes(fhm.attributes)){
-            ctx.channel().writeAndFlush(new NetworkMessage(NetworkMessage.CTRL_MSG, new SecondHandshakeMessage()));
+            ctx.channel().writeAndFlush(new NetworkMessage(NetworkMessage.CTRL_MSG, new SecondHandshakeMessage(myAttrs)));
             ctx.fireUserEventTriggered(new HandshakeCompleted(fhm.attributes));
             ctx.pipeline().remove(this);
         } else {

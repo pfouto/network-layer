@@ -194,7 +194,7 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
         assert con.getLoop().inEventLoop();
         Host clientSocket;
         try {
-            clientSocket = con.getAttributes().getHost(LISTEN_ADDRESS_ATTRIBUTE);
+            clientSocket = con.getPeerAttributes().getHost(LISTEN_ADDRESS_ATTRIBUTE);
         } catch (IOException e) {
             logger.error("Error parsing LISTEN_ADDRESS_ATTRIBUTE of inbound connection: " + e.getMessage());
             con.disconnect();
@@ -202,7 +202,7 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
         }
 
         if (clientSocket == null) {
-            logger.error("Inbound connection without LISTEN_ADDRESS: " + con.getPeer() + " " + con.getAttributes());
+            logger.error("Inbound connection without LISTEN_ADDRESS: " + con.getPeer() + " " + con.getPeerAttributes());
             return;
         }
 

@@ -8,6 +8,7 @@ import network.data.Attributes;
 import network.messaging.NetworkMessage;
 import network.messaging.control.ControlMessage;
 import network.messaging.control.FirstHandshakeMessage;
+import network.messaging.control.SecondHandshakeMessage;
 import network.userevents.HandshakeCompleted;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -41,7 +42,8 @@ public class OutHandshakeHandler extends ChannelDuplexHandler {
             throw new Exception("Received application message in handshake: " + msg);
         ControlMessage cMsg = (ControlMessage) msg.payload;
         if(cMsg.type == ControlMessage.Type.SECOND_HS) {
-            ctx.fireUserEventTriggered(new HandshakeCompleted(attrs));
+            SecondHandshakeMessage shm = (SecondHandshakeMessage) cMsg;
+            ctx.fireUserEventTriggered(new HandshakeCompleted(shm.attributes));
             ctx.pipeline().remove(this);
         } else if (cMsg.type == ControlMessage.Type.INVALID_ATTR){
             throw new Exception("Attributes refused");

@@ -36,7 +36,7 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
                                 EventLoop loop, Attributes attrs, int hbInterval, int hbTolerance) {
         super(consumer, loop, false);
         this.peer = peer;
-        this.attributes = attrs;
+        this.peerAttributes = attrs;
 
         this.listener = listener;
 
@@ -50,7 +50,7 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
                 ch.pipeline().addLast("IdleHandler", new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
                 ch.pipeline().addLast("MessageDecoder", new MessageDecoder<>(serializer));
                 ch.pipeline().addLast("MessageEncoder", new MessageEncoder<>(serializer));
-                ch.pipeline().addLast("OutHandshakeHandler", new OutHandshakeHandler(attributes));
+                ch.pipeline().addLast("OutHandshakeHandler", new OutHandshakeHandler(peerAttributes));
                 ch.pipeline().addLast("OutCon", OutConnectionHandler.this);
             }
         });
@@ -112,6 +112,7 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
             if (state != State.HANDSHAKING || ctx.channel() != channel)
                 throw new AssertionError("Handshake completed while not in handshake state: " + peer);
             state = State.CONNECTED;
+            this.peerAttributes = ((HandshakeCompleted) evt).getAttr();
             logger.debug("Handshake completed to: " + peer);
             listener.outboundConnectionUp(this);
         } else
@@ -171,7 +172,7 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
     public String toString() {
         return "OutConnectionHandler{" +
                 "peer=" + peer +
-                ", attributes=" + attributes +
+                ", attributes=" + peerAttributes +
                 ", channel=" + channel +
                 '}';
     }

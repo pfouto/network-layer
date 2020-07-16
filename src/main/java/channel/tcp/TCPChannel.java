@@ -168,7 +168,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     protected void onInboundConnectionUp(Connection<T> con) {
         Host clientSocket;
         try {
-            clientSocket = con.getAttributes().getHost(LISTEN_ADDRESS_ATTRIBUTE);
+            clientSocket = con.getPeerAttributes().getHost(LISTEN_ADDRESS_ATTRIBUTE);
         } catch (IOException e) {
             logger.error("Inbound connection without valid listen address: " + e.getMessage());
             con.disconnect();

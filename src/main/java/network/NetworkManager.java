@@ -31,8 +31,8 @@ public class NetworkManager<T> {
 
     private static final Logger logger = LogManager.getLogger(NetworkManager.class);
 
-    private Bootstrap clientBootstrap;
-    private EventLoopGroup workerGroup;
+    private final Bootstrap clientBootstrap;
+    private final EventLoopGroup workerGroup;
 
     private Channel serverChannel;
 
@@ -88,27 +88,38 @@ public class NetworkManager<T> {
                 serializer, workerGroup.next(), attrs, hbInterval, hbTolerance);
     }
 
-    public void createServerSocket(InConnListener<T> listener, Host listenAddr, AttributeValidator validator,
-                                   int childThreads) {
-        createServerSocket(listener, listenAddr, validator, childThreads, 1);
+    public void createServerSocket(InConnListener<T> l, Host addr, AttributeValidator v, int childThreads) {
+        createServerSocket(l, addr, v, childThreads, 1);
     }
 
-    public void createServerSocket(InConnListener<T> listener, Host listenAddr, AttributeValidator validator) {
-        createServerSocket(listener, listenAddr, validator, 0, 1);
+    public void createServerSocket(InConnListener<T> l, Host addr, Attributes attr, AttributeValidator v, int childThreads) {
+        createServerSocket(l, addr, attr, v, childThreads, 1);
     }
 
-    public void createServerSocket(InConnListener<T> listener, Host listenAddr, AttributeValidator validator,
-                                   int childThreads, int parentThreads) {
-        createServerSocket(listener, listenAddr, validator, createNewWorkerGroup(childThreads),
-                createNewWorkerGroup(parentThreads));
+    public void createServerSocket(InConnListener<T> l, Host addr, AttributeValidator v) {
+        createServerSocket(l, addr, v, 0, 1);
+    }
+    public void createServerSocket(InConnListener<T> l, Host addr, Attributes attr, AttributeValidator v) {
+        createServerSocket(l, addr, attr, v, 0, 1);
     }
 
-    public void createServerSocket(InConnListener<T> listener, Host listenAddr, AttributeValidator validator,
-                                   EventLoopGroup childGroup) {
-        createServerSocket(listener, listenAddr, validator, childGroup, createNewWorkerGroup(1));
+    public void createServerSocket(InConnListener<T> l, Host addr, AttributeValidator v, int childThreads, int parentThreads) {
+        createServerSocket(l, addr, Attributes.EMPTY, v, createNewWorkerGroup(childThreads), createNewWorkerGroup(parentThreads));
     }
 
-    public void createServerSocket(InConnListener<T> listener, Host listenAddr, AttributeValidator validator,
+    public void createServerSocket(InConnListener<T> l, Host addr, Attributes attr, AttributeValidator v, int childThreads, int parentThreads) {
+        createServerSocket(l, addr, attr, v, createNewWorkerGroup(childThreads), createNewWorkerGroup(parentThreads));
+    }
+
+    public void createServerSocket(InConnListener<T> l, Host addr, AttributeValidator v, EventLoopGroup childGroup) {
+        createServerSocket(l, addr, Attributes.EMPTY, v, childGroup, createNewWorkerGroup(1));
+    }
+
+    public void createServerSocket(InConnListener<T> l, Host addr, Attributes attr, AttributeValidator v, EventLoopGroup childGroup) {
+        createServerSocket(l, addr, attr, v, childGroup, createNewWorkerGroup(1));
+    }
+
+    public void createServerSocket(InConnListener<T> listener, Host listenAddr, Attributes attrs, AttributeValidator validator,
                                    EventLoopGroup childGroup, EventLoopGroup parentGroup) {
         //Default number of threads for boss group is 1
         if (serverChannel != null) return;
@@ -123,7 +134,7 @@ public class NetworkManager<T> {
                 ch.pipeline().addLast("IdleHandler", new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
                 ch.pipeline().addLast("MessageDecoder", new MessageDecoder<>(serializer));
                 ch.pipeline().addLast("MessageEncoder", new MessageEncoder<>(serializer));
-                ch.pipeline().addLast("InHandshakeHandler", new InHandshakeHandler(validator));
+                ch.pipeline().addLast("InHandshakeHandler", new InHandshakeHandler(validator, attrs));
                 ch.pipeline().addLast("InCon", new InConnectionHandler<>(listener, consumer, ch.eventLoop()));
             }
         });
@@ -147,6 +158,7 @@ public class NetworkManager<T> {
         else if (KQueue.isAvailable()) return new KQueueEventLoopGroup(nThreads);
         else return new NioEventLoopGroup(nThreads);
     }
+
     public static EventLoopGroup createNewWorkerGroup() {
         return createNewWorkerGroup(0);
     }

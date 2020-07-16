@@ -12,7 +12,7 @@ public interface Connection<T> {
 
     Host getPeer();
 
-    Attributes getAttributes();
+    Attributes getPeerAttributes();
 
     void disconnect();
 

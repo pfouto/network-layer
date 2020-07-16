@@ -1,8 +1,6 @@
 package network.pipeline;
 
 import io.netty.channel.*;
-import io.netty.util.concurrent.Future;
-import io.netty.util.concurrent.GenericFutureListener;
 import io.netty.util.concurrent.Promise;
 import io.netty.util.concurrent.PromiseNotifier;
 import network.data.Host;
@@ -59,7 +57,7 @@ public class InConnectionHandler<T> extends ConnectionHandler<T> {
     @Override
     public void internalUserEventTriggered(ChannelHandlerContext ctx, Object evt) {
         if (evt instanceof HandshakeCompleted) {
-            this.attributes = ((HandshakeCompleted) evt).getAttr();
+            this.peerAttributes = ((HandshakeCompleted) evt).getAttr();
             listener.inboundConnectionUp(this);
             outsideUp = true;
         } else
@@ -89,7 +87,7 @@ public class InConnectionHandler<T> extends ConnectionHandler<T> {
     public String toString() {
         return "InConnectionHandler{" +
                 "peer=" + peer +
-                ", attributes=" + attributes +
+                ", attributes=" + peerAttributes +
                 ", channel=" + channel +
                 '}';
     }
