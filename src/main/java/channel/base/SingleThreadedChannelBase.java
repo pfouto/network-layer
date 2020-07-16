@@ -9,12 +9,22 @@ import network.listeners.MessageListener;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+/**
+ * An abstract class that represents a Single Threaded Channel
+ *
+ * @param <T> The message type processed by the channel
+ * @param <Y> The message type that is received from the network
+ */
 public abstract class SingleThreadedChannelBase<T, Y> implements IChannel<T>, MessageListener<Y> {
 
     private static final Logger logger = LogManager.getLogger(SingleThreadedChannelBase.class);
 
     protected final DefaultEventExecutor loop;
 
+    /**
+     * Creates a new single threaded channel
+     * @param threadName the name of the thread that will execute the channel
+     */
     public SingleThreadedChannelBase(String threadName) {
         loop = new DefaultEventExecutor(new DefaultThreadFactory(threadName));
     }

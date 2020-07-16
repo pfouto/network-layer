@@ -46,7 +46,7 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
 
         int port = DEFAULT_PORT;
         if (properties.containsKey("port"))
-            port = Integer.parseInt(properties.getProperty("port"));
+                port = Integer.parseInt(properties.getProperty("port"));
 
         network = new NetworkManager<>(serializer, this,
                 1000, 3000, 1000);
