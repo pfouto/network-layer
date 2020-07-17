@@ -33,10 +33,9 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
 
     public OutConnectionHandler(Host peer, Bootstrap bootstrap, OutConnListener<T> listener,
                                 MessageListener<T> consumer, ISerializer<T> serializer,
-                                EventLoop loop, Attributes attrs, int hbInterval, int hbTolerance) {
-        super(consumer, loop, false);
+                                EventLoop loop, Attributes selfAttrs, int hbInterval, int hbTolerance) {
+        super(consumer, loop, false, selfAttrs);
         this.peer = peer;
-        this.peerAttributes = attrs;
 
         this.listener = listener;
 
@@ -50,7 +49,7 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
                 ch.pipeline().addLast("IdleHandler", new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
                 ch.pipeline().addLast("MessageDecoder", new MessageDecoder<>(serializer));
                 ch.pipeline().addLast("MessageEncoder", new MessageEncoder<>(serializer));
-                ch.pipeline().addLast("OutHandshakeHandler", new OutHandshakeHandler(peerAttributes));
+                ch.pipeline().addLast("OutHandshakeHandler", new OutHandshakeHandler(selfAttrs));
                 ch.pipeline().addLast("OutCon", OutConnectionHandler.this);
             }
         });

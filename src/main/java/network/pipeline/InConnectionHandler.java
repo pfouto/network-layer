@@ -3,6 +3,7 @@ package network.pipeline;
 import io.netty.channel.*;
 import io.netty.util.concurrent.Promise;
 import io.netty.util.concurrent.PromiseNotifier;
+import network.data.Attributes;
 import network.data.Host;
 import network.listeners.MessageListener;
 import network.listeners.InConnListener;
@@ -20,8 +21,8 @@ public class InConnectionHandler<T> extends ConnectionHandler<T> {
     private boolean outsideUp;
     private final InConnListener<T> listener;
 
-    public InConnectionHandler(InConnListener<T> listener, MessageListener<T> consumer, EventLoop loop) {
-        super(consumer, loop, true);
+    public InConnectionHandler(InConnListener<T> listener, MessageListener<T> consumer, EventLoop loop, Attributes selfAttrs) {
+        super(consumer, loop, true, selfAttrs);
         this.listener = listener;
         outsideUp = false;
     }

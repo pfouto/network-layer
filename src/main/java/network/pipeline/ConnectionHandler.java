@@ -20,16 +20,20 @@ public abstract class ConnectionHandler<T> extends ChannelDuplexHandler implemen
 
     Host peer;
     Attributes peerAttributes;
+    Attributes selfAttributes;
+
     Channel channel;
     EventLoop loop;
     private final MessageListener<T> consumer;
     private final boolean incoming;
 
-    public ConnectionHandler(MessageListener<T> consumer, EventLoop loop, boolean incoming){
+    public ConnectionHandler(MessageListener<T> consumer, EventLoop loop, boolean incoming, Attributes selfAttrs) {
         this.consumer = consumer;
         this.incoming = incoming;
+        this.selfAttributes = selfAttrs;
         this.loop = loop;
     }
+
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
@@ -71,11 +75,15 @@ public abstract class ConnectionHandler<T> extends ChannelDuplexHandler implemen
         return peerAttributes;
     }
 
-    public boolean isInbound(){
+    public final Attributes getSelfAttributes() {
+        return selfAttributes;
+    }
+
+    public boolean isInbound() {
         return incoming;
     }
 
-    public boolean isOutbound(){
+    public boolean isOutbound() {
         return !incoming;
     }
 

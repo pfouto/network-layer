@@ -14,6 +14,8 @@ public interface Connection<T> {
 
     Attributes getPeerAttributes();
 
+    Attributes getSelfAttributes();
+
     void disconnect();
 
     boolean isInbound();

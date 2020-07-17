@@ -135,7 +135,7 @@ public class NetworkManager<T> {
                 ch.pipeline().addLast("MessageDecoder", new MessageDecoder<>(serializer));
                 ch.pipeline().addLast("MessageEncoder", new MessageEncoder<>(serializer));
                 ch.pipeline().addLast("InHandshakeHandler", new InHandshakeHandler(validator, attrs));
-                ch.pipeline().addLast("InCon", new InConnectionHandler<>(listener, consumer, ch.eventLoop()));
+                ch.pipeline().addLast("InCon", new InConnectionHandler<>(listener, consumer, ch.eventLoop(), attrs));
             }
         });
         //TODO: study options / child options
