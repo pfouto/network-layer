@@ -22,7 +22,7 @@ public class Attributes {
     }
 
     public Attributes(Map<String, byte[]> initialValues) {
-        this.attrMap = initialValues;
+        this.attrMap = new HashMap<>(initialValues);
     }
 
     public Attributes shallowClone() {

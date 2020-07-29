@@ -99,6 +99,7 @@ public class NetworkManager<T> {
     public void createServerSocket(InConnListener<T> l, Host addr, AttributeValidator v) {
         createServerSocket(l, addr, v, 0, 1);
     }
+
     public void createServerSocket(InConnListener<T> l, Host addr, Attributes attr, AttributeValidator v) {
         createServerSocket(l, addr, attr, v, 0, 1);
     }
@@ -122,7 +123,9 @@ public class NetworkManager<T> {
     public void createServerSocket(InConnListener<T> listener, Host listenAddr, Attributes attrs, AttributeValidator validator,
                                    EventLoopGroup childGroup, EventLoopGroup parentGroup) {
         //Default number of threads for boss group is 1
-        if (serverChannel != null) return;
+        if (serverChannel != null) throw new IllegalStateException("Server socket already created");
+
+        if (attrs == null) throw new IllegalArgumentException("Attributes argument is NULL");
 
         //TODO change groups options
         ServerBootstrap b = new ServerBootstrap();

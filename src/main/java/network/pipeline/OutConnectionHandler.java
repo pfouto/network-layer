@@ -84,7 +84,7 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
                 ChannelFuture future = channel.writeAndFlush(new NetworkMessage(NetworkMessage.APP_MSG, msg));
                 if (promise != null) future.addListener(new PromiseNotifier<>(promise));
             } else
-                logger.error("Writing message " + msg + " to channel " + peer + " in unprepared state " + state);
+                logger.warn("Writing message " + msg + " to channel " + peer + " in unprepared state " + state);
         });
     }
 

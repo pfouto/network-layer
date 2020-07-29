@@ -2,6 +2,7 @@ package channel.tcp;
 
 import channel.ChannelListener;
 import channel.base.SingleThreadedBiChannel;
+import channel.tcp.ConnectionState.State;
 import channel.tcp.events.*;
 import io.netty.util.concurrent.Promise;
 import network.AttributeValidator;
@@ -12,7 +13,6 @@ import network.data.Attributes;
 import network.data.Host;
 import org.apache.commons.collections4.BidiMap;
 import org.apache.commons.collections4.bidimap.DualHashBidiMap;
-import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -36,14 +36,12 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     private final NetworkManager<T> network;
     private final ChannelListener<T> listener;
 
-    private Attributes attributes;
-
-    private Map<Host, Pair<Connection<T>, Queue<T>>> pendingOut;
-    private Map<Host, Connection<T>> establishedOut;
+    private final Attributes attributes;
 
     //Host represents the client server socket, not the client tcp connection address!
     //client connection address is in connection.getPeer
-    private BidiMap<Host, Connection<T>> establishedIn;
+    private final BidiMap<Host, Connection<T>> inConnections;
+    private final Map<Host, ConnectionState<T>> outConnections;
 
     public TCPChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties)
             throws IOException {
@@ -70,31 +68,46 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         attributes.putShort(CHANNEL_MAGIC_ATTRIBUTE, TCP_MAGIC_NUMBER);
         attributes.putHost(LISTEN_ADDRESS_ATTRIBUTE, listenAddress);
 
-        pendingOut = new HashMap<>();
-        establishedOut = new HashMap<>();
-        establishedIn = new DualHashBidiMap<>();
+        inConnections = new DualHashBidiMap<>();
+        outConnections = new HashMap<>();
     }
 
     @Override
     protected void onOpenConnection(Host peer) {
-        throw new NotImplementedException("Pls fix me");
+        ConnectionState<T> conState = outConnections.get(peer);
+        if (conState == null) {
+            logger.debug("onOpenConnection creating connection to: " + peer);
+            outConnections.put(peer, new ConnectionState<>(network.createConnection(peer, attributes, this)));
+        } else if (conState.getState() == State.DISCONNECTING) {
+            logger.debug("onOpenConnection reopening after close to: " + peer);
+            conState.setState(State.DISCONNECTING_RECONNECT);
+        } else
+            logger.debug("onOpenConnection ignored: " + peer);
     }
 
     @Override
     protected void onSendMessage(T msg, Host peer, int connection) {
-        logger.debug("SendMessage " + msg + " " + peer + " " +
-                (connection == CONNECTION_IN ? "IN" : "OUT"));
+        logger.debug("SendMessage " + msg + " " + peer + " " + (connection == CONNECTION_IN ? "IN" : "OUT"));
         if (connection <= CONNECTION_OUT) {
-            Connection<T> established = establishedOut.get(peer);
-            if (established != null) {
-                sendWithListener(msg, peer, established);
-            } else {
-                Pair<Connection<T>, Queue<T>> pair = pendingOut.computeIfAbsent(peer, k ->
-                        Pair.of(network.createConnection(peer, attributes, this), new LinkedList<>()));
-                pair.getValue().add(msg);
+
+            ConnectionState<T> conState = outConnections.computeIfAbsent(peer, k -> {
+                logger.debug("onSendMessage creating connection to: " + peer);
+                return new ConnectionState<>(network.createConnection(peer, attributes, this));
+            });
+
+            if (conState.getState() == State.CONNECTING) {
+                conState.getQueue().add(msg);
+            } else if (conState.getState() == State.CONNECTED) {
+                sendWithListener(msg, peer, conState.getConnection());
+            } else if (conState.getState() == State.DISCONNECTING) {
+                conState.getQueue().add(msg);
+                conState.setState(State.DISCONNECTING_RECONNECT);
+            } else if (conState.getState() == State.DISCONNECTING_RECONNECT) {
+                conState.getQueue().add(msg);
             }
+
         } else if (connection == CONNECTION_IN) {
-            Connection<T> inConn = establishedIn.get(peer);
+            Connection<T> inConn = inConnections.get(peer);
             if (inConn != null)
                 sendWithListener(msg, peer, inConn);
             else
@@ -118,49 +131,66 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     @Override
     protected void onOutboundConnectionUp(Connection<T> conn) {
         logger.debug("OutboundConnectionUp " + conn.getPeer());
-        Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(conn.getPeer());
-        if (remove != null) {
-            Connection<T> put = establishedOut.put(conn.getPeer(), conn);
-            if (put != null) throw new RuntimeException("Connection already exists in connection up");
+        ConnectionState<T> conState = outConnections.get(conn.getPeer());
+        if (conState == null) {
+            throw new AssertionError("ConnectionUp with no conState: " + conn);
+        } else if (conState.getState() == State.CONNECTED){
+            throw new AssertionError("ConnectionUp in CONNECTED state: " + conn);
+        } else if (conState.getState() == State.CONNECTING) {
+            conState.setState(State.CONNECTED);
+            conState.getQueue().forEach(m -> sendWithListener(m, conn.getPeer(), conn));
+            conState.getQueue().clear();
             listener.deliverEvent(new OutConnectionUp(conn.getPeer()));
-            remove.getValue().forEach(t -> sendWithListener(t, conn.getPeer(), conn));
-        } else {
-            logger.warn("ConnectionUp with no pending: " + conn);
+        } else { //DISCONNECTING OR DISCONNECTING_RECONNECT
+            //do nothing
         }
     }
 
     @Override
     protected void onCloseConnection(Host peer, int connection) {
         logger.debug("CloseConnection " + peer);
-        Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(peer);
-        if (remove != null) remove.getKey().disconnect();
-
-        Connection<T> established = establishedOut.get(peer);
-        if (established != null) established.disconnect();
+        ConnectionState<T> conState = outConnections.get(peer);
+        if (conState != null) {
+            if (conState.getState() == State.CONNECTED || conState.getState() == State.CONNECTING
+                    || conState.getState() == State.DISCONNECTING_RECONNECT) {
+                conState.setState(State.DISCONNECTING);
+                conState.getQueue().clear();
+                conState.getConnection().disconnect();
+            }
+        }
     }
 
     @Override
     protected void onOutboundConnectionDown(Connection<T> conn, Throwable cause) {
+
         logger.debug("OutboundConnectionDown " + conn.getPeer() + (cause != null ? (" " + cause) : ""));
-        Connection<T> remove = establishedOut.remove(conn.getPeer());
-        if (remove != null) {
+        ConnectionState<T> conState = outConnections.remove(conn.getPeer());
+        if (conState == null) {
+            throw new AssertionError("ConnectionDown with no conState: " + conn);
+        } else if (conState.getState() == State.CONNECTING) {
+            throw new AssertionError("ConnectionDown in CONNECTING state: " + conn);
+        } else if (conState.getState() == State.CONNECTED) {
             listener.deliverEvent(new OutConnectionDown(conn.getPeer(), cause));
-        } else {
-            logger.warn("ConnectionDown with no context available: " + conn);
+        } else if (conState.getState() == State.DISCONNECTING_RECONNECT) {
+            outConnections.put(conn.getPeer(), new ConnectionState<>(
+                    network.createConnection(conn.getPeer(), attributes, this), conState.getQueue()));
         }
     }
 
     @Override
     protected void onOutboundConnectionFailed(Connection<T> conn, Throwable cause) {
         logger.debug("OutboundConnectionFailed " + conn.getPeer() + (cause != null ? (" " + cause) : ""));
-        if (establishedOut.containsKey(conn.getPeer()))
-            throw new RuntimeException("Connection exists in conn failed");
 
-        Pair<Connection<T>, Queue<T>> remove = pendingOut.remove(conn.getPeer());
-        if (remove != null) {
-            listener.deliverEvent(new OutConnectionFailed<>(conn.getPeer(), remove.getRight(), cause));
-        } else {
-            logger.warn("ConnectionFailed with no pending: " + conn);
+        ConnectionState<T> conState = outConnections.remove(conn.getPeer());
+        if (conState == null) {
+            throw new AssertionError("ConnectionFailed with no conState: " + conn);
+        } else if (conState.getState() == State.CONNECTING) {
+            listener.deliverEvent(new OutConnectionFailed<>(conn.getPeer(), conState.getQueue(), cause));
+        } else if (conState.getState() == State.DISCONNECTING_RECONNECT) {
+            outConnections.put(conn.getPeer(), new ConnectionState<>(
+                    network.createConnection(conn.getPeer(), attributes, this), conState.getQueue()));
+        } else if (conState.getState() == State.CONNECTED) {
+            throw new AssertionError("ConnectionFailed in state: " + conState.getState() + " - " + conn);
         }
     }
 
@@ -176,14 +206,14 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         }
         logger.debug("InboundConnectionUp " + clientSocket);
 
-        if (establishedIn.putIfAbsent(clientSocket, con) != null)
-            throw new RuntimeException("Double incoming connection from: " + con.getPeer());
+        if (inConnections.putIfAbsent(clientSocket, con) != null)
+            throw new RuntimeException("Double incoming connection from: " + clientSocket + "(" + con.getPeer() + ")");
         listener.deliverEvent(new InConnectionUp(clientSocket));
     }
 
     @Override
     protected void onInboundConnectionDown(Connection<T> con, Throwable cause) {
-        Host host = establishedIn.removeValue(con);
+        Host host = inConnections.removeValue(con);
         logger.debug("InboundConnectionDown " + host + (cause != null ? (" " + cause) : ""));
         listener.deliverEvent(new InConnectionDown(host, cause));
     }
@@ -205,7 +235,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     public void onDeliverMessage(T msg, Connection<T> conn) {
         Host host;
         if (conn.isInbound())
-            host = establishedIn.getKey(conn);
+            host = inConnections.getKey(conn);
         else
             host = conn.getPeer();
         logger.debug("DeliverMessage " + msg + " " + host + " " + (conn.isInbound() ? "IN" : "OUT"));
