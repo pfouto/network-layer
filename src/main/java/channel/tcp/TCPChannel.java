@@ -11,16 +11,16 @@ import network.ISerializer;
 import network.NetworkManager;
 import network.data.Attributes;
 import network.data.Host;
-import org.apache.commons.collections4.BidiMap;
-import org.apache.commons.collections4.bidimap.DualHashBidiMap;
-import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
-import java.util.*;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Properties;
 
 public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements AttributeValidator {
 
@@ -40,7 +40,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
     //Host represents the client server socket, not the client tcp connection address!
     //client connection address is in connection.getPeer
-    private final BidiMap<Host, Connection<T>> inConnections;
+    private final Map<Host, LinkedList<Connection<T>>> inConnections;
     private final Map<Host, ConnectionState<T>> outConnections;
 
     public TCPChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties)
@@ -68,7 +68,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         attributes.putShort(CHANNEL_MAGIC_ATTRIBUTE, TCP_MAGIC_NUMBER);
         attributes.putHost(LISTEN_ADDRESS_ATTRIBUTE, listenAddress);
 
-        inConnections = new DualHashBidiMap<>();
+        inConnections = new HashMap<>();
         outConnections = new HashMap<>();
     }
 
@@ -107,9 +107,9 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
             }
 
         } else if (connection == CONNECTION_IN) {
-            Connection<T> inConn = inConnections.get(peer);
-            if (inConn != null)
-                sendWithListener(msg, peer, inConn);
+            LinkedList<Connection<T>> inConnList = inConnections.get(peer);
+            if (inConnList != null)
+                sendWithListener(msg, peer, inConnList.getLast());
             else
                 listener.messageFailed(msg, peer, new IllegalArgumentException("No incoming connection"));
         } else {
@@ -134,7 +134,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         ConnectionState<T> conState = outConnections.get(conn.getPeer());
         if (conState == null) {
             throw new AssertionError("ConnectionUp with no conState: " + conn);
-        } else if (conState.getState() == State.CONNECTED){
+        } else if (conState.getState() == State.CONNECTED) {
             throw new AssertionError("ConnectionUp in CONNECTED state: " + conn);
         } else if (conState.getState() == State.CONNECTING) {
             conState.setState(State.CONNECTED);
@@ -200,22 +200,45 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         try {
             clientSocket = con.getPeerAttributes().getHost(LISTEN_ADDRESS_ATTRIBUTE);
         } catch (IOException e) {
-            logger.error("Inbound connection without valid listen address: " + e.getMessage());
+            logger.error("Inbound connection without valid listen address in connectionUp: " + e.getMessage());
             con.disconnect();
             return;
         }
-        logger.debug("InboundConnectionUp " + clientSocket);
 
-        if (inConnections.putIfAbsent(clientSocket, con) != null)
-            throw new RuntimeException("Double incoming connection from: " + clientSocket + "(" + con.getPeer() + ")");
-        listener.deliverEvent(new InConnectionUp(clientSocket));
+        LinkedList<Connection<T>> inConnList = inConnections.computeIfAbsent(clientSocket, k -> new LinkedList<>());
+        inConnList.add(con);
+        if (inConnList.size() == 1) {
+            logger.debug("InboundConnectionUp " + clientSocket);
+            listener.deliverEvent(new InConnectionUp(clientSocket));
+        } else {
+            logger.debug("Multiple InboundConnectionUp " + inConnList.size() + clientSocket);
+        }
     }
 
     @Override
     protected void onInboundConnectionDown(Connection<T> con, Throwable cause) {
-        Host host = inConnections.removeValue(con);
-        logger.debug("InboundConnectionDown " + host + (cause != null ? (" " + cause) : ""));
-        listener.deliverEvent(new InConnectionDown(host, cause));
+        Host clientSocket;
+        try {
+            clientSocket = con.getPeerAttributes().getHost(LISTEN_ADDRESS_ATTRIBUTE);
+        } catch (IOException e) {
+            logger.error("Inbound connection without valid listen address in connectionDown: " + e.getMessage());
+            con.disconnect();
+            return;
+        }
+
+        LinkedList<Connection<T>> inConnList = inConnections.get(clientSocket);
+        if (inConnList == null || inConnList.isEmpty())
+            throw new AssertionError("No connections in InboundConnectionDown " + clientSocket);
+        if (!inConnList.remove(con))
+            throw new AssertionError("No connection in InboundConnectionDown " + clientSocket);
+
+        if (inConnList.isEmpty()) {
+            logger.debug("InboundConnectionDown " + clientSocket + (cause != null ? (" " + cause) : ""));
+            listener.deliverEvent(new InConnectionDown(clientSocket, cause));
+            inConnections.remove(clientSocket);
+        } else {
+            logger.debug("Extra InboundConnectionDown " + inConnList.size() + clientSocket);
+        }
     }
 
     @Override
@@ -235,7 +258,13 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     public void onDeliverMessage(T msg, Connection<T> conn) {
         Host host;
         if (conn.isInbound())
-            host = inConnections.getKey(conn);
+            try {
+                host = conn.getPeerAttributes().getHost(LISTEN_ADDRESS_ATTRIBUTE);
+            } catch (IOException e) {
+                logger.error("Inbound connection without valid listen address in deliver message: " + e.getMessage());
+                conn.disconnect();
+                return;
+            }
         else
             host = conn.getPeer();
         logger.debug("DeliverMessage " + msg + " " + host + " " + (conn.isInbound() ? "IN" : "OUT"));
