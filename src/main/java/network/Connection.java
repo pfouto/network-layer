@@ -27,4 +27,21 @@ public interface Connection<T> {
     void sendMessage(T msg);
 
     EventLoop getLoop();
+
+    int getSentAppBytes();
+
+    int getSentAppMessages();
+
+    int getSentControlBytes();
+
+    int getSentControlMessages();
+
+    int getReceivedAppBytes();
+
+    int getReceivedAppMessages();
+
+    int getReceivedControlBytes();
+
+    int getReceivedControlMessages();
+
 }

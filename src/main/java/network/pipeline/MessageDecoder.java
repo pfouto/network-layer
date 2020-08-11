@@ -18,8 +18,17 @@ public class MessageDecoder<T> extends ByteToMessageDecoder {
 
     private final ISerializer<T> serializer;
 
+    private int receivedAppBytes;
+    private int receivedControlBytes;
+    private int receivedAppMessages;
+    private int receivedControlMessages;
+
     public MessageDecoder(ISerializer<T> serializer) {
         this.serializer = serializer;
+        this.receivedAppBytes = 0;
+        this.receivedAppMessages = 0;
+        this.receivedControlBytes = 0;
+        this.receivedControlMessages = 0;
     }
 
     @Override
@@ -36,13 +45,33 @@ public class MessageDecoder<T> extends ByteToMessageDecoder {
         switch (code){
             case NetworkMessage.CTRL_MSG:
                 payload = ControlMessage.serializer.deserialize(in);
+                receivedControlMessages++;
+                receivedControlBytes += 4 + msgSize;
                 break;
             case NetworkMessage.APP_MSG:
                 payload = serializer.deserialize(in);
+                receivedAppBytes += 4 + msgSize;
+                receivedAppMessages++;
                 break;
             default:
                 throw new AssertionError("Unknown msg code in decoder: " + code);
         }
         out.add(new NetworkMessage(code, payload));
+    }
+
+    public int getReceivedAppBytes() {
+        return receivedAppBytes;
+    }
+
+    public int getReceivedAppMessages() {
+        return receivedAppMessages;
+    }
+
+    public int getReceivedControlBytes() {
+        return receivedControlBytes;
+    }
+
+    public int getReceivedControlMessages() {
+        return receivedControlMessages;
     }
 }

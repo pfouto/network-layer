@@ -21,8 +21,11 @@ public class InConnectionHandler<T> extends ConnectionHandler<T> {
     private boolean outsideUp;
     private final InConnListener<T> listener;
 
-    public InConnectionHandler(InConnListener<T> listener, MessageListener<T> consumer, EventLoop loop, Attributes selfAttrs) {
+    public InConnectionHandler(InConnListener<T> listener, MessageListener<T> consumer, EventLoop loop,
+                               Attributes selfAttrs, MessageEncoder<T> encoder, MessageDecoder<T> decoder) {
         super(consumer, loop, true, selfAttrs);
+        this.encoder = encoder;
+        this.decoder = decoder;
         this.listener = listener;
         outsideUp = false;
     }

@@ -131,14 +131,17 @@ public class NetworkManager<T> {
         ServerBootstrap b = new ServerBootstrap();
         b.group(parentGroup, childGroup).channel(serverChannelClass);
 
+        MessageEncoder<T> encoder = new MessageEncoder<>(serializer);
+        MessageDecoder<T> decoder = new MessageDecoder<>(serializer);
         b.childHandler(new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
                 ch.pipeline().addLast("IdleHandler", new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
-                ch.pipeline().addLast("MessageDecoder", new MessageDecoder<>(serializer));
-                ch.pipeline().addLast("MessageEncoder", new MessageEncoder<>(serializer));
+                ch.pipeline().addLast("MessageDecoder", decoder);
+                ch.pipeline().addLast("MessageEncoder", encoder);
                 ch.pipeline().addLast("InHandshakeHandler", new InHandshakeHandler(validator, attrs));
-                ch.pipeline().addLast("InCon", new InConnectionHandler<>(listener, consumer, ch.eventLoop(), attrs));
+                ch.pipeline().addLast("InCon",
+                        new InConnectionHandler<>(listener, consumer, ch.eventLoop(), attrs, encoder, decoder));
             }
         });
         //TODO: study options / child options

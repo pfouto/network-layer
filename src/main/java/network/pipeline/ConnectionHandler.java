@@ -21,6 +21,8 @@ public abstract class ConnectionHandler<T> extends ChannelDuplexHandler implemen
     Host peer;
     Attributes peerAttributes;
     Attributes selfAttributes;
+    MessageEncoder<T> encoder;
+    MessageDecoder<T> decoder;
 
     Channel channel;
     EventLoop loop;
@@ -91,4 +93,45 @@ public abstract class ConnectionHandler<T> extends ChannelDuplexHandler implemen
     public EventLoop getLoop() {
         return loop;
     }
+
+    @Override
+    public int getSentAppBytes() {
+        return encoder.getSentAppBytes();
+    }
+
+    @Override
+    public int getSentAppMessages() {
+        return encoder.getSentAppMessages();
+    }
+
+    @Override
+    public int getSentControlBytes() {
+        return encoder.getSentControlBytes();
+    }
+
+    @Override
+    public int getSentControlMessages() {
+        return encoder.getSentControlMessages();
+    }
+
+    @Override
+    public int getReceivedAppBytes() {
+        return decoder.getReceivedAppBytes();
+    }
+
+    @Override
+    public int getReceivedAppMessages() {
+        return decoder.getReceivedAppMessages();
+    }
+
+    @Override
+    public int getReceivedControlBytes() {
+        return decoder.getReceivedControlBytes();
+    }
+
+    @Override
+    public int getReceivedControlMessages() {
+        return decoder.getReceivedControlMessages();
+    }
+
 }

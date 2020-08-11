@@ -43,12 +43,14 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
         this.channel = null;
         this.clientBootstrap = bootstrap.clone();
         this.clientBootstrap.remoteAddress(peer.getAddress(), peer.getPort());
+        this.encoder = new MessageEncoder<>(serializer);
+        this.decoder = new MessageDecoder<>(serializer);
         this.clientBootstrap.handler(new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
                 ch.pipeline().addLast("IdleHandler", new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
-                ch.pipeline().addLast("MessageDecoder", new MessageDecoder<>(serializer));
-                ch.pipeline().addLast("MessageEncoder", new MessageEncoder<>(serializer));
+                ch.pipeline().addLast("MessageDecoder", decoder);
+                ch.pipeline().addLast("MessageEncoder", encoder);
                 ch.pipeline().addLast("OutHandshakeHandler", new OutHandshakeHandler(selfAttrs));
                 ch.pipeline().addLast("OutCon", OutConnectionHandler.this);
             }
