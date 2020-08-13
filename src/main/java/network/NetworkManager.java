@@ -131,11 +131,11 @@ public class NetworkManager<T> {
         ServerBootstrap b = new ServerBootstrap();
         b.group(parentGroup, childGroup).channel(serverChannelClass);
 
-        MessageEncoder<T> encoder = new MessageEncoder<>(serializer);
-        MessageDecoder<T> decoder = new MessageDecoder<>(serializer);
         b.childHandler(new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
+                MessageEncoder<T> encoder = new MessageEncoder<>(serializer);
+                MessageDecoder<T> decoder = new MessageDecoder<>(serializer);
                 ch.pipeline().addLast("IdleHandler", new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
                 ch.pipeline().addLast("MessageDecoder", decoder);
                 ch.pipeline().addLast("MessageEncoder", encoder);
