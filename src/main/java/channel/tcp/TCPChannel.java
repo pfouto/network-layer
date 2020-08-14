@@ -43,8 +43,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     private final Map<Host, LinkedList<Connection<T>>> inConnections;
     private final Map<Host, ConnectionState<T>> outConnections;
 
-    public TCPChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties)
-            throws IOException {
+    public TCPChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties) throws IOException {
         super("TCPChannel");
         this.listener = list;
 
@@ -113,8 +112,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
             else
                 listener.messageFailed(msg, peer, new IllegalArgumentException("No incoming connection"));
         } else {
-            listener.messageFailed(msg, peer,
-                    new IllegalArgumentException("Invalid connection: " + connection));
+            listener.messageFailed(msg, peer, new IllegalArgumentException("Invalid connection: " + connection));
             logger.error("Invalid sendMessage mode " + connection);
         }
     }

@@ -17,10 +17,10 @@ public class MessageEncoder<T> extends MessageToByteEncoder<NetworkMessage> {
 
     private final ISerializer<T> serializer;
 
-    private int sentAppBytes;
-    private int sentControlBytes;
-    private int sentAppMessages;
-    private int sentControlMessages;
+    private long sentAppBytes;
+    private long sentControlBytes;
+    private long sentAppMessages;
+    private long sentControlMessages;
 
     public MessageEncoder(ISerializer<T> serializer) {
         this.serializer = serializer;
@@ -60,19 +60,19 @@ public class MessageEncoder<T> extends MessageToByteEncoder<NetworkMessage> {
         out.resetWriterIndex();
     }
 
-    public int getSentAppBytes() {
+    public long getSentAppBytes() {
         return sentAppBytes;
     }
 
-    public int getSentAppMessages() {
+    public long getSentAppMessages() {
         return sentAppMessages;
     }
 
-    public int getSentControlBytes() {
+    public long getSentControlBytes() {
         return sentControlBytes;
     }
 
-    public int getSentControlMessages() {
+    public long getSentControlMessages() {
         return sentControlMessages;
     }
 }

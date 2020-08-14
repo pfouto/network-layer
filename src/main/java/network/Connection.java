@@ -28,20 +28,20 @@ public interface Connection<T> {
 
     EventLoop getLoop();
 
-    int getSentAppBytes();
+    long getSentAppBytes();
 
-    int getSentAppMessages();
+    long getSentAppMessages();
 
-    int getSentControlBytes();
+    long getSentControlBytes();
 
-    int getSentControlMessages();
+    long getSentControlMessages();
 
-    int getReceivedAppBytes();
+    long getReceivedAppBytes();
 
-    int getReceivedAppMessages();
+    long getReceivedAppMessages();
 
-    int getReceivedControlBytes();
+    long getReceivedControlBytes();
 
-    int getReceivedControlMessages();
+    long getReceivedControlMessages();
 
 }

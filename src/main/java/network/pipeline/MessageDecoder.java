@@ -18,10 +18,10 @@ public class MessageDecoder<T> extends ByteToMessageDecoder {
 
     private final ISerializer<T> serializer;
 
-    private int receivedAppBytes;
-    private int receivedControlBytes;
-    private int receivedAppMessages;
-    private int receivedControlMessages;
+    private long receivedAppBytes;
+    private long receivedControlBytes;
+    private long receivedAppMessages;
+    private long receivedControlMessages;
 
     public MessageDecoder(ISerializer<T> serializer) {
         this.serializer = serializer;
@@ -59,19 +59,19 @@ public class MessageDecoder<T> extends ByteToMessageDecoder {
         out.add(new NetworkMessage(code, payload));
     }
 
-    public int getReceivedAppBytes() {
+    public long getReceivedAppBytes() {
         return receivedAppBytes;
     }
 
-    public int getReceivedAppMessages() {
+    public long getReceivedAppMessages() {
         return receivedAppMessages;
     }
 
-    public int getReceivedControlBytes() {
+    public long getReceivedControlBytes() {
         return receivedControlBytes;
     }
 
-    public int getReceivedControlMessages() {
+    public long getReceivedControlMessages() {
         return receivedControlMessages;
     }
 }

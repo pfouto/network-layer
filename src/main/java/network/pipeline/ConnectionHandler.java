@@ -95,42 +95,42 @@ public abstract class ConnectionHandler<T> extends ChannelDuplexHandler implemen
     }
 
     @Override
-    public int getSentAppBytes() {
+    public long getSentAppBytes() {
         return encoder.getSentAppBytes();
     }
 
     @Override
-    public int getSentAppMessages() {
+    public long getSentAppMessages() {
         return encoder.getSentAppMessages();
     }
 
     @Override
-    public int getSentControlBytes() {
+    public long getSentControlBytes() {
         return encoder.getSentControlBytes();
     }
 
     @Override
-    public int getSentControlMessages() {
+    public long getSentControlMessages() {
         return encoder.getSentControlMessages();
     }
 
     @Override
-    public int getReceivedAppBytes() {
+    public long getReceivedAppBytes() {
         return decoder.getReceivedAppBytes();
     }
 
     @Override
-    public int getReceivedAppMessages() {
+    public long getReceivedAppMessages() {
         return decoder.getReceivedAppMessages();
     }
 
     @Override
-    public int getReceivedControlBytes() {
+    public long getReceivedControlBytes() {
         return decoder.getReceivedControlBytes();
     }
 
     @Override
-    public int getReceivedControlMessages() {
+    public long getReceivedControlMessages() {
         return decoder.getReceivedControlMessages();
     }
 
