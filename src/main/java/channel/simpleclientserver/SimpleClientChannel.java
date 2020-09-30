@@ -28,7 +28,7 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
     public static final short SIMPLE_CLIENT_MAGIC_NUMBER = 0x5CC5;
     public final static int DEFAULT_PORT = 13174;
 
-    public final static String NAME = "SimpleClientChannel";
+    public final static String NAME = "ClientChannel";
     public final static String ADDRESS_KEY = "address";
     public final static String PORT_KEY = "port";
     public final static String WORKER_GROUP_KEY = "workerGroup";
@@ -58,9 +58,7 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
         else
             throw new IllegalArgumentException(NAME + " requires server address");
 
-        int port = properties.containsKey(PORT_KEY) ?
-                Integer.parseInt(properties.getProperty(PORT_KEY)) :
-                DEFAULT_PORT;
+        int port = properties.containsKey(PORT_KEY) ? (Integer)(properties.get(PORT_KEY)) : DEFAULT_PORT;
 
         serverAddress = new Host(addr, port);
 

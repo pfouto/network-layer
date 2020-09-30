@@ -4,6 +4,7 @@ import channel.ChannelListener;
 import channel.base.SingleThreadedBiChannel;
 import channel.tcp.ConnectionState.State;
 import channel.tcp.events.*;
+import io.netty.channel.EventLoopGroup;
 import io.netty.util.concurrent.Promise;
 import network.AttributeValidator;
 import network.Connection;
@@ -21,11 +22,20 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements AttributeValidator {
 
     private static final Logger logger = LogManager.getLogger(TCPChannel.class);
     private static final short TCP_MAGIC_NUMBER = 0x4505;
+
+    public final static String NAME = "TCPChannel";
+    public final static String ADDRESS_KEY = "address";
+    public final static String PORT_KEY = "port";
+    public final static String WORKER_GROUP_KEY = "worker_group";
+    public final static String TRIGGER_SENT_KEY = "trigger_sent";
+    public final static String DEBUG_INTERVAL_KEY = "debug_interval";
+
 
     public static final String LISTEN_ADDRESS_ATTRIBUTE = "listen_address";
 
@@ -43,25 +53,29 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     private final Map<Host, LinkedList<Connection<T>>> inConnections;
     private final Map<Host, ConnectionState<T>> outConnections;
 
+    private final boolean triggerSent;
+
     public TCPChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties) throws IOException {
         super("TCPChannel");
         this.listener = list;
 
         InetAddress addr = null;
-        if (properties.containsKey("address"))
-            addr = Inet4Address.getByName(properties.getProperty("address"));
+        if (properties.containsKey(ADDRESS_KEY))
+            addr = Inet4Address.getByName(properties.getProperty(ADDRESS_KEY));
+        else
+            throw new IllegalArgumentException(NAME + " requires binding address");
 
-        if (addr == null)
-            throw new AssertionError("No address received in TCP Channel properties");
-
-        int port = DEFAULT_PORT;
-        if (properties.containsKey("port"))
-            port = Integer.parseInt(properties.getProperty("port"));
-
-        network = new NetworkManager<>(serializer, this, 1000, 3000, 1000);
+        int port = properties.containsKey(PORT_KEY) ? (Integer) (properties.get(PORT_KEY)) : DEFAULT_PORT;
 
         Host listenAddress = new Host(addr, port);
-        network.createServerSocket(this, listenAddress, this);
+
+        EventLoopGroup eventExecutors = properties.containsKey(WORKER_GROUP_KEY) ?
+                (EventLoopGroup) properties.get(WORKER_GROUP_KEY) :
+                NetworkManager.createNewWorkerGroup(0);
+
+        network = new NetworkManager<>(serializer, this, 1000, 3000, 1000, eventExecutors);
+
+        network.createServerSocket(this, listenAddress, this, eventExecutors);
 
         attributes = new Attributes();
         attributes.putShort(CHANNEL_MAGIC_ATTRIBUTE, TCP_MAGIC_NUMBER);
@@ -69,6 +83,28 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
         inConnections = new HashMap<>();
         outConnections = new HashMap<>();
+
+        triggerSent = Boolean.parseBoolean(properties.getProperty(TRIGGER_SENT_KEY, "false"));
+
+        if(properties.containsKey(DEBUG_INTERVAL_KEY)) {
+            int debugInterval = (Integer) (properties.get(DEBUG_INTERVAL_KEY));
+            loop.scheduleAtFixedRate(this::print, debugInterval, debugInterval, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    void print() {
+        StringBuilder data = new StringBuilder("\t" + getData());
+        data.append("\tIN ");
+        for (Map.Entry<Host, LinkedList<Connection<T>>> e : inConnections.entrySet()) {
+            data.append(e.getKey().getAddress().getHostAddress().split("\\.")[3]).append(":")
+                    .append(String.format("%,d", e.getValue().getFirst().getReceivedAppBytes())).append(" ");
+        }
+        data.append("\tOUT ");
+        for (Map.Entry<Host, ConnectionState<T>> entry : outConnections.entrySet()) {
+            data.append(entry.getKey().getAddress().getHostAddress().split("\\.")[3]).append(":")
+                    .append(String.format("%,d", entry.getValue().getConnection().getSentAppBytes())).append(" ");
+        }
+        logger.info(data);
     }
 
     @Override
@@ -120,8 +156,8 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     private void sendWithListener(T msg, Host peer, Connection<T> established) {
         Promise<Void> promise = loop.newPromise();
         promise.addListener(future -> {
-            if (future.isSuccess()) listener.messageSent(msg, peer);
-            else listener.messageFailed(msg, peer, future.cause());
+            if (future.isSuccess() && triggerSent) listener.messageSent(msg, peer);
+            else if (!future.isSuccess()) listener.messageFailed(msg, peer, future.cause());
         });
         established.sendMessage(msg, promise);
     }

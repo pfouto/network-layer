@@ -5,7 +5,7 @@ import network.listeners.OutConnListener;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public abstract class SingleThreadedClientChannel<T, Y> extends SingleThreadedChannelBase<T,Y>
+public abstract class SingleThreadedClientChannel<T, Y> extends SingleThreadedChannel<T,Y>
         implements OutConnListener<Y> {
 
     private static final Logger logger = LogManager.getLogger(SingleThreadedClientChannel.class);

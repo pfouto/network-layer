@@ -6,7 +6,7 @@ import network.listeners.OutConnListener;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public abstract class SingleThreadedBiChannel<T, Y> extends SingleThreadedChannelBase<T,Y>
+public abstract class SingleThreadedBiChannel<T, Y> extends SingleThreadedChannel<T,Y>
         implements OutConnListener<Y>, InConnListener<Y> {
 
     private static final Logger logger = LogManager.getLogger(SingleThreadedBiChannel.class);

@@ -73,9 +73,7 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
         else
             throw new IllegalArgumentException(NAME + " requires binding address");
 
-        int port = properties.containsKey(PORT_KEY) ?
-                Integer.parseInt(properties.getProperty(PORT_KEY)) :
-                DEFAULT_PORT;
+        int port = properties.containsKey(PORT_KEY) ? (int)(properties.get(PORT_KEY)) : DEFAULT_PORT;
 
         Host listenAddress = new Host(addr, port);
 

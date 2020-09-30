@@ -4,6 +4,7 @@ import channel.ChannelListener;
 import channel.base.SingleThreadedServerChannel;
 import channel.simpleclientserver.events.ClientDownEvent;
 import channel.simpleclientserver.events.ClientUpEvent;
+import channel.tcp.ConnectionState;
 import io.netty.channel.EventLoopGroup;
 import io.netty.util.concurrent.Promise;
 import network.AttributeValidator;
@@ -14,11 +15,13 @@ import network.data.Attributes;
 import network.data.Host;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.util.JsonUtils;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import static channel.simpleclientserver.SimpleClientChannel.SIMPLE_CLIENT_MAGIC_NUMBER;
 
@@ -28,16 +31,20 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
 
     public final static int DEFAULT_PORT = 13174;
 
-    public final static String NAME = "SimpleServerChannel";
+    public final static String NAME = "ServerChannel";
     public final static String ADDRESS_KEY = "address";
     public final static String PORT_KEY = "port";
-    public final static String WORKER_GROUP_KEY = "workerGroup";
+    public final static String WORKER_GROUP_KEY = "worker_group";
+
+    public final static String TRIGGER_SENT_KEY = "trigger_sent";
+    public final static String DEBUG_INTERVAL_KEY = "debug_interval";
 
     private final NetworkManager<T> network;
     private final ChannelListener<T> listener;
 
     private final Map<Host, Connection<T>> clientConnections;
 
+    private final boolean triggerSent;
 
     public SimpleServerChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties)
             throws UnknownHostException {
@@ -52,9 +59,7 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
         else
             throw new IllegalArgumentException(NAME + " requires binding address");
 
-        int port = properties.containsKey(PORT_KEY) ?
-                Integer.parseInt(properties.getProperty(PORT_KEY)) :
-                DEFAULT_PORT;
+        int port = properties.containsKey(PORT_KEY) ? (Integer)(properties.get(PORT_KEY)) : DEFAULT_PORT;
 
         if (properties.containsKey(WORKER_GROUP_KEY)) {
             network = new NetworkManager<>(serializer, this, 1000, 3000, 1000, null);
@@ -65,6 +70,31 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
             network.createServerSocket(this, new Host(addr, port), this);
         }
 
+        triggerSent = Boolean.parseBoolean(properties.getProperty(TRIGGER_SENT_KEY, "false"));
+
+        if(properties.containsKey(DEBUG_INTERVAL_KEY)) {
+            int debugInterval = (Integer) (properties.get(DEBUG_INTERVAL_KEY));
+            loop.scheduleAtFixedRate(this::print, debugInterval, debugInterval, TimeUnit.MILLISECONDS);
+        }
+
+    }
+
+    void print() {
+        StringBuilder data = new StringBuilder(getData());
+        try {
+            data.append("\t");
+            long totalRec = 0;
+            long totalSent = 0;
+            for (Map.Entry<Host, Connection<T>> e : clientConnections.entrySet()) {
+                totalRec += e.getValue().getReceivedAppBytes();
+                totalSent += e.getValue().getSentAppBytes();
+            }
+            data.append(clientConnections.size()).append(":").append(String.format("%,d", totalSent))
+                    .append("/").append(String.format("%,d", totalRec));
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+        logger.info(data);
     }
 
     @Override
@@ -73,10 +103,8 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
         if (conn != null) {
             Promise<Void> promise = loop.newPromise();
             promise.addListener(future -> {
-                if (!future.isSuccess())
-                    listener.messageFailed(msg, peer, future.cause());
-                else
-                    listener.messageSent(msg, peer);
+                if (future.isSuccess() && triggerSent) listener.messageSent(msg, peer);
+                else if(!future.isSuccess()) listener.messageFailed(msg, peer, future.cause());
             });
             conn.sendMessage(msg, promise);
         } else {
