@@ -4,7 +4,7 @@ import network.data.Host;
 
 public class OutConnectionUp extends TCPEvent {
 
-    public static final short EVENT_ID = 303;
+    public static final short EVENT_ID = 5;
 
     private final Host node;
 

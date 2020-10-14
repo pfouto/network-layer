@@ -7,7 +7,7 @@ import java.util.Queue;
 
 public class OutConnectionFailed<T>  extends TCPEvent {
 
-    public static final short EVENT_ID = 302;
+    public static final short EVENT_ID = 4;
 
     private final Host node;
     private final Queue<T> pendingMessages;

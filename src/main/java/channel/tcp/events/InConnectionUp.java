@@ -4,7 +4,7 @@ import network.data.Host;
 
 public class InConnectionUp extends TCPEvent {
 
-    public static final short EVENT_ID = 304;
+    public static final short EVENT_ID = 2;
 
     private final Host node;
 

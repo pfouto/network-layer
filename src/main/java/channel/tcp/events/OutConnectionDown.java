@@ -6,7 +6,7 @@ import java.util.List;
 
 public class OutConnectionDown extends TCPEvent {
 
-    public static final short EVENT_ID = 301;
+    public static final short EVENT_ID = 3;
 
     private final Host node;
     private final Throwable cause;

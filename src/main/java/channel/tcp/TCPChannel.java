@@ -12,16 +12,14 @@ import network.ISerializer;
 import network.NetworkManager;
 import network.data.Attributes;
 import network.data.Host;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements AttributeValidator {
@@ -30,15 +28,24 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     private static final short TCP_MAGIC_NUMBER = 0x4505;
 
     public final static String NAME = "TCPChannel";
+
     public final static String ADDRESS_KEY = "address";
     public final static String PORT_KEY = "port";
     public final static String WORKER_GROUP_KEY = "worker_group";
     public final static String TRIGGER_SENT_KEY = "trigger_sent";
-    public final static String DEBUG_INTERVAL_KEY = "debug_interval";
+    public final static String METRICS_INTERVAL_KEY = "metrics_interval";
+    public final static String HEARTBEAT_INTERVAL_KEY = "heartbeat_interval";
+    public final static String HEARTBEAT_TOLERANCE_KEY = "heartbeat_tolerance";
+    public final static String CONNECT_TIMEOUT_KEY = "connect_timeout";
 
     public static final String LISTEN_ADDRESS_ATTRIBUTE = "listen_address";
 
-    public final static int DEFAULT_PORT = 85739;
+    public final static String DEFAULT_PORT = "85739";
+    public final static String DEFAULT_HB_INTERVAL = "1000";
+    public final static String DEFAULT_HB_TOLERANCE = "3000";
+    public final static String DEFAULT_CONNECT_TIMEOUT = "1000";
+    public final static String DEFAULT_METRICS_INTERVAL = "-1";
+
     public final static int CONNECTION_OUT = 0;
     public final static int CONNECTION_IN = 1;
 
@@ -52,7 +59,11 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     private final Map<Host, LinkedList<Connection<T>>> inConnections;
     private final Map<Host, ConnectionState<T>> outConnections;
 
+    private List<Pair<Host, Connection<T>>> oldIn;
+    private List<Pair<Host, ConnectionState<T>>> oldOUt;
+
     private final boolean triggerSent;
+    private final boolean metrics;
 
     public TCPChannel(ISerializer<T> serializer, ChannelListener<T> list, Properties properties) throws IOException {
         super("TCPChannel");
@@ -64,7 +75,13 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         else
             throw new IllegalArgumentException(NAME + " requires binding address");
 
-        int port = properties.containsKey(PORT_KEY) ? (Integer) (properties.get(PORT_KEY)) : DEFAULT_PORT;
+        int port = Integer.parseInt(properties.getProperty(PORT_KEY, DEFAULT_PORT));
+        int hbInterval = Integer.parseInt(properties.getProperty(HEARTBEAT_INTERVAL_KEY, DEFAULT_HB_INTERVAL));
+        int hbTolerance = Integer.parseInt(properties.getProperty(HEARTBEAT_TOLERANCE_KEY, DEFAULT_HB_TOLERANCE));
+        int connTimeout = Integer.parseInt(properties.getProperty(CONNECT_TIMEOUT_KEY, DEFAULT_CONNECT_TIMEOUT));
+        int metricsInterval = Integer.parseInt(properties.getProperty(METRICS_INTERVAL_KEY, DEFAULT_METRICS_INTERVAL));
+        this.triggerSent = Boolean.parseBoolean(properties.getProperty(TRIGGER_SENT_KEY, "false"));
+        this.metrics = metricsInterval > 0;
 
         Host listenAddress = new Host(addr, port);
 
@@ -72,8 +89,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
                 (EventLoopGroup) properties.get(WORKER_GROUP_KEY) :
                 NetworkManager.createNewWorkerGroup();
 
-        network = new NetworkManager<>(serializer, this, 1000, 3000, 1000, eventExecutors);
-
+        network = new NetworkManager<>(serializer, this, hbInterval, hbTolerance, connTimeout, eventExecutors);
         network.createServerSocket(this, listenAddress, this, eventExecutors);
 
         attributes = new Attributes();
@@ -83,27 +99,15 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         inConnections = new HashMap<>();
         outConnections = new HashMap<>();
 
-        triggerSent = Boolean.parseBoolean(properties.getProperty(TRIGGER_SENT_KEY, "false"));
-
-        if (properties.containsKey(DEBUG_INTERVAL_KEY)) {
-            int debugInterval = (Integer) (properties.get(DEBUG_INTERVAL_KEY));
-            loop.scheduleAtFixedRate(this::print, debugInterval, debugInterval, TimeUnit.MILLISECONDS);
+        if (metrics) {
+            oldIn = new LinkedList<>();
+            oldOUt = new LinkedList<>();
+            loop.scheduleAtFixedRate(this::triggerMetricsEvent, metricsInterval, metricsInterval, TimeUnit.MILLISECONDS);
         }
     }
 
-    void print() {
-        StringBuilder data = new StringBuilder("\t");
-        data.append("\tIN ");
-        for (Map.Entry<Host, LinkedList<Connection<T>>> e : inConnections.entrySet()) {
-            data.append(e.getKey().getAddress().getHostAddress().split("\\.")[3]).append(":")
-                    .append(String.format("%,d", e.getValue().getFirst().getReceivedAppBytes())).append(" ");
-        }
-        data.append("\tOUT ");
-        for (Map.Entry<Host, ConnectionState<T>> entry : outConnections.entrySet()) {
-            data.append(entry.getKey().getAddress().getHostAddress().split("\\.")[3]).append(":")
-                    .append(String.format("%,d", entry.getValue().getConnection().getSentAppBytes())).append(" ");
-        }
-        logger.info(data);
+    void triggerMetricsEvent() {
+        listener.deliverEvent(new ChannelMetrics(oldIn, oldOUt, inConnections, outConnections));
     }
 
     @Override
@@ -123,20 +127,18 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     protected void onSendMessage(T msg, Host peer, int connection) {
         logger.debug("SendMessage " + msg + " " + peer + " " + (connection == CONNECTION_IN ? "IN" : "OUT"));
         if (connection <= CONNECTION_OUT) {
-
-            ConnectionState<T> conState = outConnections.computeIfAbsent(peer, k -> {
-                logger.debug("onSendMessage creating connection to: " + peer);
-                return new ConnectionState<>(network.createConnection(peer, attributes, this));
-            });
-
-            if (conState.getState() == State.CONNECTING || conState.getState() == State.DISCONNECTING_RECONNECT) {
-                conState.getQueue().add(msg);
-            } else if (conState.getState() == State.CONNECTED) {
-                sendWithListener(msg, peer, conState.getConnection());
-            } else if (conState.getState() == State.DISCONNECTING) {
-                conState.getQueue().add(msg);
-                conState.setState(State.DISCONNECTING_RECONNECT);
-            }
+            ConnectionState<T> conState = outConnections.get(peer);
+            if (conState != null) {
+                if (conState.getState() == State.CONNECTING || conState.getState() == State.DISCONNECTING_RECONNECT) {
+                    conState.getQueue().add(msg);
+                } else if (conState.getState() == State.CONNECTED) {
+                    sendWithListener(msg, peer, conState.getConnection());
+                } else if (conState.getState() == State.DISCONNECTING) {
+                    conState.getQueue().add(msg);
+                    conState.setState(State.DISCONNECTING_RECONNECT);
+                }
+            } else
+                listener.messageFailed(msg, peer, new IllegalArgumentException("No outgoing connection"));
 
         } else if (connection == CONNECTION_IN) {
             LinkedList<Connection<T>> inConnList = inConnections.get(peer);
@@ -196,13 +198,18 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         ConnectionState<T> conState = outConnections.remove(conn.getPeer());
         if (conState == null) {
             throw new AssertionError("ConnectionDown with no conState: " + conn);
-        } else if (conState.getState() == State.CONNECTING) {
-            throw new AssertionError("ConnectionDown in CONNECTING state: " + conn);
-        } else if (conState.getState() == State.CONNECTED) {
-            listener.deliverEvent(new OutConnectionDown(conn.getPeer(), cause));
-        } else if (conState.getState() == State.DISCONNECTING_RECONNECT) {
-            outConnections.put(conn.getPeer(), new ConnectionState<>(
-                    network.createConnection(conn.getPeer(), attributes, this), conState.getQueue()));
+        } else {
+            if (conState.getState() == State.CONNECTING) {
+                throw new AssertionError("ConnectionDown in CONNECTING state: " + conn);
+            } else if (conState.getState() == State.CONNECTED) {
+                listener.deliverEvent(new OutConnectionDown(conn.getPeer(), cause));
+            } else if (conState.getState() == State.DISCONNECTING_RECONNECT) {
+                outConnections.put(conn.getPeer(), new ConnectionState<>(
+                        network.createConnection(conn.getPeer(), attributes, this), conState.getQueue()));
+            }
+            conState.getQueue().clear();
+            if (metrics)
+                oldOUt.add(Pair.of(conn.getPeer(), conState));
         }
     }
 
@@ -213,13 +220,18 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         ConnectionState<T> conState = outConnections.remove(conn.getPeer());
         if (conState == null) {
             throw new AssertionError("ConnectionFailed with no conState: " + conn);
-        } else if (conState.getState() == State.CONNECTING) {
-            listener.deliverEvent(new OutConnectionFailed<>(conn.getPeer(), conState.getQueue(), cause));
-        } else if (conState.getState() == State.DISCONNECTING_RECONNECT) {
-            outConnections.put(conn.getPeer(), new ConnectionState<>(
-                    network.createConnection(conn.getPeer(), attributes, this), conState.getQueue()));
-        } else if (conState.getState() == State.CONNECTED) {
-            throw new AssertionError("ConnectionFailed in state: " + conState.getState() + " - " + conn);
+        } else {
+            if (conState.getState() == State.CONNECTING)
+                listener.deliverEvent(new OutConnectionFailed<>(conn.getPeer(), conState.getQueue(), cause));
+            else if (conState.getState() == State.DISCONNECTING_RECONNECT)
+                outConnections.put(conn.getPeer(), new ConnectionState<>(
+                        network.createConnection(conn.getPeer(), attributes, this), conState.getQueue()));
+            else if (conState.getState() == State.CONNECTED)
+                throw new AssertionError("ConnectionFailed in state: " + conState.getState() + " - " + conn);
+
+            conState.getQueue().clear();
+            if (metrics)
+                oldOUt.add(Pair.of(conn.getPeer(), conState));
         }
     }
 
@@ -265,9 +277,11 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
             logger.debug("InboundConnectionDown " + clientSocket + (cause != null ? (" " + cause) : ""));
             listener.deliverEvent(new InConnectionDown(clientSocket, cause));
             inConnections.remove(clientSocket);
-        } else {
+        } else
             logger.debug("Extra InboundConnectionDown " + inConnList.size() + clientSocket);
-        }
+
+        if (metrics)
+            oldIn.add(Pair.of(clientSocket, con));
     }
 
     @Override

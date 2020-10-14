@@ -4,7 +4,7 @@ import network.data.Host;
 
 public class InConnectionDown extends TCPEvent {
 
-    public static final short EVENT_ID = 305;
+    public static final short EVENT_ID = 1;
 
     private final Host node;
     private final Throwable cause;
