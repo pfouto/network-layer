@@ -58,7 +58,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
         super("TCPChannel");
         this.listener = list;
 
-        InetAddress addr = null;
+        InetAddress addr;
         if (properties.containsKey(ADDRESS_KEY))
             addr = Inet4Address.getByName(properties.getProperty(ADDRESS_KEY));
         else
@@ -85,7 +85,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
         triggerSent = Boolean.parseBoolean(properties.getProperty(TRIGGER_SENT_KEY, "false"));
 
-        if(properties.containsKey(DEBUG_INTERVAL_KEY)) {
+        if (properties.containsKey(DEBUG_INTERVAL_KEY)) {
             int debugInterval = (Integer) (properties.get(DEBUG_INTERVAL_KEY));
             loop.scheduleAtFixedRate(this::print, debugInterval, debugInterval, TimeUnit.MILLISECONDS);
         }
@@ -129,15 +129,13 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
                 return new ConnectionState<>(network.createConnection(peer, attributes, this));
             });
 
-            if (conState.getState() == State.CONNECTING) {
+            if (conState.getState() == State.CONNECTING || conState.getState() == State.DISCONNECTING_RECONNECT) {
                 conState.getQueue().add(msg);
             } else if (conState.getState() == State.CONNECTED) {
                 sendWithListener(msg, peer, conState.getConnection());
             } else if (conState.getState() == State.DISCONNECTING) {
                 conState.getQueue().add(msg);
                 conState.setState(State.DISCONNECTING_RECONNECT);
-            } else if (conState.getState() == State.DISCONNECTING_RECONNECT) {
-                conState.getQueue().add(msg);
             }
 
         } else if (connection == CONNECTION_IN) {
@@ -174,8 +172,6 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
             conState.getQueue().forEach(m -> sendWithListener(m, conn.getPeer(), conn));
             conState.getQueue().clear();
             listener.deliverEvent(new OutConnectionUp(conn.getPeer()));
-        } else { //DISCONNECTING OR DISCONNECTING_RECONNECT
-            //do nothing
         }
     }
 
