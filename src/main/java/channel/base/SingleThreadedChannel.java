@@ -20,34 +20,13 @@ public abstract class SingleThreadedChannel<T, Y> implements IChannel<T>, Messag
 
     protected final DefaultEventExecutor loop;
 
-    ThreadMXBean tmx = ManagementFactory.getThreadMXBean();
+    //ThreadMXBean tmx = ManagementFactory.getThreadMXBean();
 
     public SingleThreadedChannel(String threadName) {
         loop = new DefaultEventExecutor(new DefaultThreadFactory(threadName));
 
-        tmx.setThreadContentionMonitoringEnabled(true);
+        //tmx.setThreadContentionMonitoringEnabled(true);
 
-    }
-
-    long lastBC = 0, lastBT = 0, lastWC = 0, lastWT = 0;
-
-    protected String getData() {
-        ThreadInfo threadInfo = tmx.getThreadInfo(loop.threadProperties().id());
-
-        long cBC = threadInfo.getBlockedCount();
-        long cBT = threadInfo.getBlockedTime();
-        long cWC = threadInfo.getWaitedCount();
-        long cWT = threadInfo.getWaitedTime();
-
-        String format = String.format("bc %s bt %s wc %s wt %s pend %s", String.format("%,2d", (cBC - lastBC)),
-                String.format("%,2d", (cBT - lastBT)), String.format("%,9d", (cWC - lastWC)),
-                String.format("%,7d", (cWT - lastWT)), String.format("%8d", loop.pendingTasks()));
-
-        lastBC = cBC;
-        lastBT = cBT;
-        lastWC = cWC;
-        lastWT = cWT;
-        return format;
     }
 
     @Override

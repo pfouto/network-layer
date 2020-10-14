@@ -25,8 +25,13 @@ import network.pipeline.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.concurrent.ThreadFactory;
+
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
+/**
+ *
+ */
 public class NetworkManager<T> {
 
     private static final Logger logger = LogManager.getLogger(NetworkManager.class);
@@ -57,6 +62,9 @@ public class NetworkManager<T> {
         }
     }
 
+    /**
+     * Creates a new instance
+     */
     public NetworkManager(ISerializer<T> serializer, MessageListener<T> consumer,
                           int hbInterval, int hbTolerance, int connectTimeout) {
         //Default number of threads for worker groups is (from netty) number of core * 2
@@ -127,7 +135,6 @@ public class NetworkManager<T> {
 
         if (attrs == null) throw new IllegalArgumentException("Attributes argument is NULL");
 
-        //TODO change groups options
         ServerBootstrap b = new ServerBootstrap();
         b.group(parentGroup, childGroup).channel(serverChannelClass);
 
@@ -136,7 +143,8 @@ public class NetworkManager<T> {
             protected void initChannel(SocketChannel ch) {
                 MessageEncoder<T> encoder = new MessageEncoder<>(serializer);
                 MessageDecoder<T> decoder = new MessageDecoder<>(serializer);
-                ch.pipeline().addLast("IdleHandler", new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
+                ch.pipeline().addLast("IdleHandler",
+                        new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
                 ch.pipeline().addLast("MessageDecoder", decoder);
                 ch.pipeline().addLast("MessageEncoder", encoder);
                 ch.pipeline().addLast("InHandshakeHandler", new InHandshakeHandler(validator, attrs));
@@ -159,12 +167,18 @@ public class NetworkManager<T> {
         }
     }
 
+    /**
+     * Creates a new {@link EventLoopGroup} using the specified number of threads.
+     */
     public static EventLoopGroup createNewWorkerGroup(int nThreads) {
         if (Epoll.isAvailable()) return new EpollEventLoopGroup(nThreads);
         else if (KQueue.isAvailable()) return new KQueueEventLoopGroup(nThreads);
         else return new NioEventLoopGroup(nThreads);
     }
 
+    /**
+     * Creates a new {@link EventLoopGroup} using the default number of threads (number of cpus * 2).
+     */
     public static EventLoopGroup createNewWorkerGroup() {
         return createNewWorkerGroup(0);
     }

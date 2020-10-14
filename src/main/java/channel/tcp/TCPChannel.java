@@ -36,7 +36,6 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     public final static String TRIGGER_SENT_KEY = "trigger_sent";
     public final static String DEBUG_INTERVAL_KEY = "debug_interval";
 
-
     public static final String LISTEN_ADDRESS_ATTRIBUTE = "listen_address";
 
     public final static int DEFAULT_PORT = 85739;
@@ -71,7 +70,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
         EventLoopGroup eventExecutors = properties.containsKey(WORKER_GROUP_KEY) ?
                 (EventLoopGroup) properties.get(WORKER_GROUP_KEY) :
-                NetworkManager.createNewWorkerGroup(0);
+                NetworkManager.createNewWorkerGroup();
 
         network = new NetworkManager<>(serializer, this, 1000, 3000, 1000, eventExecutors);
 
@@ -93,7 +92,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     }
 
     void print() {
-        StringBuilder data = new StringBuilder("\t" + getData());
+        StringBuilder data = new StringBuilder("\t");
         data.append("\tIN ");
         for (Map.Entry<Host, LinkedList<Connection<T>>> e : inConnections.entrySet()) {
             data.append(e.getKey().getAddress().getHostAddress().split("\\.")[3]).append(":")

@@ -80,7 +80,7 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
     }
 
     void print() {
-        StringBuilder data = new StringBuilder(getData());
+        StringBuilder data = new StringBuilder();
         try {
             data.append("\t");
             long totalRec = 0;
