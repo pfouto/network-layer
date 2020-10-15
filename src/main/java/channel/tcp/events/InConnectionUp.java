@@ -2,6 +2,9 @@ package channel.tcp.events;
 
 import network.data.Host;
 
+/**
+ * Triggered when an incoming connection is established.
+ */
 public class InConnectionUp extends TCPEvent {
 
     public static final short EVENT_ID = 2;

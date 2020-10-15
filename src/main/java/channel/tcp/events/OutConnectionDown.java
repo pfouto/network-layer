@@ -4,6 +4,9 @@ import network.data.Host;
 
 import java.util.List;
 
+/**
+ * Triggered when an established outbound connection is disconnected.
+ */
 public class OutConnectionDown extends TCPEvent {
 
     public static final short EVENT_ID = 3;

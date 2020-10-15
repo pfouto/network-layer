@@ -2,6 +2,9 @@ package channel.tcp.events;
 
 import network.data.Host;
 
+/**
+ * Triggered when a new outbound connection is established.
+ */
 public class OutConnectionUp extends TCPEvent {
 
     public static final short EVENT_ID = 5;

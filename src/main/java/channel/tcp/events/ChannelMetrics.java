@@ -9,6 +9,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Triggered periodically is enabled. Contains metrics about every connection managed by the channel.
+ */
 public class ChannelMetrics extends TCPEvent {
 
     public static final short EVENT_ID = 6;

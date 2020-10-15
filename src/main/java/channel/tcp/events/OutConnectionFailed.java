@@ -5,6 +5,9 @@ import network.data.Host;
 import java.util.List;
 import java.util.Queue;
 
+/**
+ * Triggered when an outbound connection fails to establish.
+ */
 public class OutConnectionFailed<T>  extends TCPEvent {
 
     public static final short EVENT_ID = 4;
