@@ -55,6 +55,32 @@ public class ChannelMetrics extends TCPEvent {
         });
     }
 
+    @Override
+    public String toString() {
+        return "ChannelMetrics{" +
+                "inConnections=" + inConnections +
+                ", outConnections=" + outConnections +
+                ", oldInConnections=" + oldInConnections +
+                ", oldOutConnections=" + oldOutConnections +
+                '}';
+    }
+
+    public List<ConnectionMetrics> getInConnections() {
+        return inConnections;
+    }
+
+    public List<ConnectionMetrics> getOutConnections() {
+        return outConnections;
+    }
+
+    public List<ConnectionMetrics> getOldInConnections() {
+        return oldInConnections;
+    }
+
+    public List<ConnectionMetrics> getOldOutConnections() {
+        return oldOutConnections;
+    }
+
 
     public static class ConnectionMetrics {
         private final Host peer;

@@ -22,6 +22,54 @@ import java.net.InetAddress;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+/**
+ *  This channel is used for peer-to-peer applications, with every peer being able to both receive and establish
+ *  connections. To use this channel, the following properties need to be provided:
+ *  Required:
+ *      ADDRESS_KEY -> the address to bind the listen socket to
+ *      PORT_KEY -> the port to bind the listen socket to
+ *  Optional:
+ *      WORKER_GROUP_KEY -> a custom thread pool can be passed in this argument. This thread pool will be used to handle
+ *                          all connection events (receiving new connection, (de)serializing messages, etc).
+ *                          By default, a thread pool with 2x the number of available cores is created.
+ *      TRIGGER_SENT_KEY -> If set to true, a "messageSent" event is triggered upon sending a message (defaults to false)
+ *      METRICS_INTERVAL_KEY -> If set to a value greater than 0, a special "ChannelMetrics" event is generated periodically
+ *                              (in intervals corresponding to the value given). These events contain information about
+ *                              all connections managed by this channel (defaults to -1, which never triggers these events).
+ *      HEARTBEAT_INTERVAL_KEY -> The interval between sending each heartbeat in milliseconds. Defaults to 1000 (1 sec)
+ *      HEARTBEAT_TOLERANCE_KEY -> The time without receiving heartbeats after which a connection is closed. Used for
+ *                                 fault detection, defaults to 3000 (3 seconds).
+ *      CONNECT_TIMEOUT_KEY -> The timeout for the TCP connection establishment. Defaults to 1000 (1 sec).
+ *
+ *  This channel requires explicit connection opening, meaning that if you send a message without first calling
+ *  "openConnection", the message will not be sent (and a message failed event will be triggered). You can, however,
+ *  start sending messages before the connection is established and the "OutConnectionUp" event is triggered. These
+ *  messages will be queued and sent as soon as the connection is established. If the connection fails to establish,
+ *  the "OutConnectionFailed" event will return these messages.
+ *
+ *  The recommended way to use the channel is as follows (assuming no connection problems):
+ *      1. Call "openConnection" to a peer.
+ *      1.1 Optionally, you can start queueing up messages by using "sendMessage"
+ *      2. Wait until the "OutConnectionUp" event is triggered.
+ *      3. Send messages using "sendMessage".
+ *      4. Call "closeConnection" and stop sending messages (as they will all result in a message failed event).
+ *
+ *  By calling "closeConnection" the connection is closed only after sending all messages from previous "sendMessage"
+ *  calls.
+ *  If the connection is dropped anywhere after step 2, stop sending messages (as they will all result in message
+ *  failed events) and return to step 1. In this case, there are no guarantees that messages sent in previous "sendMessage"
+ *  calls reached their destination.
+ *
+ *  If the connection attempt fails, i.e. a "OutConnectionFailed" event is received in step 2, the same applies. Stop
+ *  sending messages and return to step 1. In this case, no messages were sent and the event returns all messages that
+ *  were queued in step 1.1.
+ *
+ *  Additionally, the events "InConnectionUp" and "InConnectionDown" are triggered whenever a peer establishes a connection
+ *  to this process. Messages can also be sent though these incoming connections (as opposed to the outgoing connections
+ *  established by "openConnection") by passing value CONNECTION_IN in the parameter "connection" of "sendMessage".
+ *  This does not require a previous "openConnection" (as we are using an incoming connection).
+ *
+ */
 public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements AttributeValidator {
 
     private static final Logger logger = LogManager.getLogger(TCPChannel.class);
