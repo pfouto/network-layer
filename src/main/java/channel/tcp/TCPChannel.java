@@ -26,20 +26,20 @@ import java.util.concurrent.TimeUnit;
  *  This channel is used for peer-to-peer applications, with every peer being able to both receive and establish
  *  connections. To use this channel, the following properties need to be provided:
  *  Required:
- *      ADDRESS_KEY -> the address to bind the listen socket to
- *      PORT_KEY -> the port to bind the listen socket to
+ *      ADDRESS_KEY: the address to bind the listen socket to
+ *      PORT_KEY: the port to bind the listen socket to
  *  Optional:
- *      WORKER_GROUP_KEY -> a custom thread pool can be passed in this argument. This thread pool will be used to handle
+ *      WORKER_GROUP_KEY: a custom thread pool can be passed in this argument. This thread pool will be used to handle
  *                          all connection events (receiving new connection, (de)serializing messages, etc).
  *                          By default, a thread pool with 2x the number of available cores is created.
- *      TRIGGER_SENT_KEY -> If set to true, a "messageSent" event is triggered upon sending a message (defaults to false)
- *      METRICS_INTERVAL_KEY -> If set to a value greater than 0, a special "ChannelMetrics" event is generated periodically
+ *      TRIGGER_SENT_KEY: If set to true, a "messageSent" event is triggered upon sending a message (defaults to false)
+ *      METRICS_INTERVAL_KEY: If set to a value greater than 0, a special "ChannelMetrics" event is generated periodically
  *                              (in intervals corresponding to the value given). These events contain information about
  *                              all connections managed by this channel (defaults to -1, which never triggers these events).
- *      HEARTBEAT_INTERVAL_KEY -> The interval between sending each heartbeat in milliseconds. Defaults to 1000 (1 sec)
- *      HEARTBEAT_TOLERANCE_KEY -> The time without receiving heartbeats after which a connection is closed. Used for
+ *      HEARTBEAT_INTERVAL_KEY: The interval between sending each heartbeat in milliseconds. Defaults to 1000 (1 sec)
+ *      HEARTBEAT_TOLERANCE_KEY: The time without receiving heartbeats after which a connection is closed. Used for
  *                                 fault detection, defaults to 3000 (3 seconds).
- *      CONNECT_TIMEOUT_KEY -> The timeout for the TCP connection establishment. Defaults to 1000 (1 sec).
+ *      CONNECT_TIMEOUT_KEY: The timeout for the TCP connection establishment. Defaults to 1000 (1 sec).
  *
  *  This channel requires explicit connection opening, meaning that if you send a message without first calling
  *  "openConnection", the message will not be sent (and a message failed event will be triggered). You can, however,
