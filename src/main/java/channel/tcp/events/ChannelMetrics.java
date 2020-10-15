@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Triggered periodically is enabled. Contains metrics about every connection managed by the channel.
+ * Triggered periodically if enabled. Contains metrics about every connection managed by the channel.
  */
 public class ChannelMetrics extends TCPEvent {
 
