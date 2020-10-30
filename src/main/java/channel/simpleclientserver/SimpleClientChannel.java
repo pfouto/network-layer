@@ -26,14 +26,25 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
     private static final Logger logger = LogManager.getLogger(SimpleClientChannel.class);
 
     public static final short SIMPLE_CLIENT_MAGIC_NUMBER = 0x5CC5;
-    public final static int DEFAULT_PORT = 13174;
 
     public final static String NAME = "ClientChannel";
     public final static String ADDRESS_KEY = "address";
     public final static String PORT_KEY = "port";
     public final static String WORKER_GROUP_KEY = "workerGroup";
+    public final static String HEARTBEAT_INTERVAL_KEY = "heartbeat_interval";
+    public final static String HEARTBEAT_TOLERANCE_KEY = "heartbeat_tolerance";
+    public final static String CONNECT_TIMEOUT_KEY = "connect_timeout";
+
+    public final static String DEFAULT_PORT = "13174";
+    public final static String DEFAULT_HB_INTERVAL = "1000";
+    public final static String DEFAULT_HB_TOLERANCE = "3000";
+    public final static String DEFAULT_CONNECT_TIMEOUT = "1000";
 
     private static final Attributes SIMPLE_CLIENT_ATTRIBUTES;
+
+    public enum State {CONNECTING, CONNECTED, DISCONNECTED}
+
+    private State state;
 
     static {
         SIMPLE_CLIENT_ATTRIBUTES = new Attributes();
@@ -58,18 +69,34 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
         else
             throw new IllegalArgumentException(NAME + " requires server address");
 
-        int port = properties.containsKey(PORT_KEY) ? (Integer)(properties.get(PORT_KEY)) : DEFAULT_PORT;
+        int port = Integer.parseInt(properties.getProperty(PORT_KEY, DEFAULT_PORT));
+        int hbInterval = Integer.parseInt(properties.getProperty(HEARTBEAT_INTERVAL_KEY, DEFAULT_HB_INTERVAL));
+        int hbTolerance = Integer.parseInt(properties.getProperty(HEARTBEAT_TOLERANCE_KEY, DEFAULT_HB_TOLERANCE));
+        int connTimeout = Integer.parseInt(properties.getProperty(CONNECT_TIMEOUT_KEY, DEFAULT_CONNECT_TIMEOUT));
 
         serverAddress = new Host(addr, port);
 
-        if (properties.containsKey(WORKER_GROUP_KEY))
-            network = new NetworkManager<>(serializer, this, 1000, 3000, 1000,
-                    (EventLoopGroup) properties.get(WORKER_GROUP_KEY));
-        else
-            network = new NetworkManager<>(serializer, this, 1000, 3000, 1000);
+        EventLoopGroup eventExecutors = properties.containsKey(WORKER_GROUP_KEY) ?
+                (EventLoopGroup) properties.get(WORKER_GROUP_KEY) :
+                NetworkManager.createNewWorkerGroup();
 
+        network = new NetworkManager<>(serializer, this, hbInterval, hbTolerance, connTimeout, eventExecutors);
+
+        state = State.DISCONNECTED;
         connection = null;
-        network.createConnection(serverAddress, SIMPLE_CLIENT_ATTRIBUTES, this);
+    }
+
+    @Override
+    protected void onOpenConnection(Host peer) {
+        connection = network.createConnection(serverAddress, SIMPLE_CLIENT_ATTRIBUTES, this);
+        state = State.CONNECTING;
+    }
+
+    @Override
+    protected void onCloseConnection(Host peer, int conn) {
+        connection.disconnect();
+        connection = null;
+        state = State.DISCONNECTED;
     }
 
     @Override
@@ -80,7 +107,7 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
             return;
         }
 
-        if (connection == null) {
+        if (state != State.CONNECTED) {
             listener.messageFailed(msg, peer, new Exception("Connection not established"));
             return;
         }
@@ -97,11 +124,6 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
     }
 
     @Override
-    protected void onCloseConnection(Host peer, int connection) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public void onDeliverMessage(T msg, Connection<T> conn) {
         listener.deliverMessage(msg, conn.getPeer());
     }
@@ -109,6 +131,7 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
     @Override
     protected void onOutboundConnectionUp(Connection<T> conn) {
         connection = conn;
+        state = State.CONNECTED;
         logger.debug("Server up: " + conn);
         listener.deliverEvent(new ServerUpEvent(conn.getPeer()));
     }
@@ -118,6 +141,8 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
         connection = null;
         logger.debug("Server down: " + conn + " ... " + cause);
         listener.deliverEvent(new ServerDownEvent(conn.getPeer(), cause));
+        connection = null;
+        state = State.DISCONNECTED;
     }
 
     @Override
@@ -125,10 +150,8 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
         logger.debug("Server con failed: " + conn + " ... " + cause);
         connection = null;
         listener.deliverEvent(new ServerFailedEvent(conn.getPeer(), cause));
+        connection = null;
+        state = State.DISCONNECTED;
     }
 
-    @Override
-    protected void onOpenConnection(Host peer) {
-        throw new NotImplementedException("Pls fix me");
-    }
 }

@@ -29,15 +29,21 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
 
     private static final Logger logger = LogManager.getLogger(SimpleServerChannel.class);
 
-    public final static int DEFAULT_PORT = 13174;
 
     public final static String NAME = "ServerChannel";
     public final static String ADDRESS_KEY = "address";
     public final static String PORT_KEY = "port";
     public final static String WORKER_GROUP_KEY = "worker_group";
+    public final static String HEARTBEAT_INTERVAL_KEY = "heartbeat_interval";
+    public final static String HEARTBEAT_TOLERANCE_KEY = "heartbeat_tolerance";
+    public final static String CONNECT_TIMEOUT_KEY = "connect_timeout";
 
     public final static String TRIGGER_SENT_KEY = "trigger_sent";
-    public final static String DEBUG_INTERVAL_KEY = "debug_interval";
+
+    public final static String DEFAULT_PORT = "13174";
+    public final static String DEFAULT_HB_INTERVAL = "1000";
+    public final static String DEFAULT_HB_TOLERANCE = "3000";
+    public final static String DEFAULT_CONNECT_TIMEOUT = "1000";
 
     private final NetworkManager<T> network;
     private final ChannelListener<T> listener;
@@ -59,42 +65,21 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
         else
             throw new IllegalArgumentException(NAME + " requires binding address");
 
-        int port = properties.containsKey(PORT_KEY) ? (Integer)(properties.get(PORT_KEY)) : DEFAULT_PORT;
+        int port = Integer.parseInt(properties.getProperty(PORT_KEY, DEFAULT_PORT));
+        int hbInterval = Integer.parseInt(properties.getProperty(HEARTBEAT_INTERVAL_KEY, DEFAULT_HB_INTERVAL));
+        int hbTolerance = Integer.parseInt(properties.getProperty(HEARTBEAT_TOLERANCE_KEY, DEFAULT_HB_TOLERANCE));
+        int connTimeout = Integer.parseInt(properties.getProperty(CONNECT_TIMEOUT_KEY, DEFAULT_CONNECT_TIMEOUT));
+        this.triggerSent = Boolean.parseBoolean(properties.getProperty(TRIGGER_SENT_KEY, "false"));
 
-        if (properties.containsKey(WORKER_GROUP_KEY)) {
-            network = new NetworkManager<>(serializer, this, 1000, 3000, 1000, null);
-            network.createServerSocket(this, new Host(addr, port), this,
-                    (EventLoopGroup) properties.get(WORKER_GROUP_KEY));
-        } else {
-            network = new NetworkManager<>(serializer, this, 1000, 3000, 1000, null);
-            network.createServerSocket(this, new Host(addr, port), this);
-        }
+        Host listenAddress = new Host(addr, port);
 
-        triggerSent = Boolean.parseBoolean(properties.getProperty(TRIGGER_SENT_KEY, "false"));
+        EventLoopGroup eventExecutors = properties.containsKey(WORKER_GROUP_KEY) ?
+                (EventLoopGroup) properties.get(WORKER_GROUP_KEY) :
+                NetworkManager.createNewWorkerGroup();
 
-        if(properties.containsKey(DEBUG_INTERVAL_KEY)) {
-            int debugInterval = (Integer) (properties.get(DEBUG_INTERVAL_KEY));
-            loop.scheduleAtFixedRate(this::print, debugInterval, debugInterval, TimeUnit.MILLISECONDS);
-        }
+        network = new NetworkManager<>(serializer, this, hbInterval, hbTolerance, connTimeout, null);
+        network.createServerSocket(this, listenAddress, this, eventExecutors);
 
-    }
-
-    void print() {
-        StringBuilder data = new StringBuilder();
-        try {
-            data.append("\t");
-            long totalRec = 0;
-            long totalSent = 0;
-            for (Map.Entry<Host, Connection<T>> e : clientConnections.entrySet()) {
-                totalRec += e.getValue().getReceivedAppBytes();
-                totalSent += e.getValue().getSentAppBytes();
-            }
-            data.append(clientConnections.size()).append(":").append(String.format("%,d", totalSent))
-                    .append("/").append(String.format("%,d", totalRec));
-        } catch (Exception e){
-            e.printStackTrace();
-        }
-        logger.info(data);
     }
 
     @Override
