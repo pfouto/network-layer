@@ -113,7 +113,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
 
     public static final String LISTEN_ADDRESS_ATTRIBUTE = "listen_address";
 
-    public final static String DEFAULT_PORT = "85739";
+    public final static String DEFAULT_PORT = "8573";
     public final static String DEFAULT_HB_INTERVAL = "1000";
     public final static String DEFAULT_HB_TOLERANCE = "3000";
     public final static String DEFAULT_CONNECT_TIMEOUT = "1000";
@@ -280,7 +280,6 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
                 outConnections.put(conn.getPeer(), new ConnectionState<>(
                         network.createConnection(conn.getPeer(), attributes, this), conState.getQueue()));
             }
-            conState.getQueue().clear();
             if (metrics)
                 oldOUt.add(Pair.of(conn.getPeer(), conState));
         }
@@ -302,7 +301,6 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
             else if (conState.getState() == ConnectionState.State.CONNECTED)
                 throw new AssertionError("ConnectionFailed in state: " + conState.getState() + " - " + conn);
 
-            conState.getQueue().clear();
             if (metrics)
                 oldOUt.add(Pair.of(conn.getPeer(), conState));
         }

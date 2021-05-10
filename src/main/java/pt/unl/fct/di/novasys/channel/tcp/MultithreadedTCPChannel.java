@@ -46,7 +46,7 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
 
     public static final String LISTEN_ADDRESS_ATTRIBUTE = "listen_address";
 
-    public final static int DEFAULT_PORT = 85739;
+    public final static int DEFAULT_PORT = 8573;
     public final static int CONNECTION_OUT = 0;
     public final static int CONNECTION_IN = 1;
 
