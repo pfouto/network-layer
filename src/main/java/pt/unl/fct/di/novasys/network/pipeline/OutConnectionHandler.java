@@ -22,14 +22,10 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 public class OutConnectionHandler<T> extends ConnectionHandler<T> implements GenericFutureListener<ChannelFuture> {
 
     private static final Logger logger = LogManager.getLogger(OutConnectionHandler.class);
-
-    // Only change in event loop!
-    private State state;
-
     private final Bootstrap clientBootstrap;
     private final OutConnListener<T> listener;
-
-    enum State {CONNECTING, HANDSHAKING, CONNECTED, DEAD}
+    // Only change in event loop!
+    private State state;
 
     public OutConnectionHandler(Host peer, Bootstrap bootstrap, OutConnListener<T> listener,
                                 MessageListener<T> consumer, ISerializer<T> serializer,
@@ -129,6 +125,7 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
                 listener.outboundConnectionDown(this, cause);
                 break;
             case HANDSHAKING:
+            case CONNECTING:
                 listener.outboundConnectionFailed(this, cause);
                 break;
             default:
@@ -177,4 +174,6 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
                 ", channel=" + channel +
                 '}';
     }
+
+    enum State {CONNECTING, HANDSHAKING, CONNECTED, DEAD}
 }
