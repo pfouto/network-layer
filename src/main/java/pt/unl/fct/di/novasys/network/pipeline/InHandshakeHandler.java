@@ -33,20 +33,23 @@ public class InHandshakeHandler extends ChannelDuplexHandler {
     public void channelRead(ChannelHandlerContext ctx, Object obj) throws Exception {
         NetworkMessage msg = (NetworkMessage) obj;
         if (msg.code != NetworkMessage.CTRL_MSG)
-            throw new Exception("Received unexpected message in handshake: " + msg);
+            throw new Exception("Received application message in inHandshake: " + msg);
 
         ControlMessage cMsg = (ControlMessage) msg.payload;
-        if (cMsg.type != ControlMessage.Type.FIRST_HS)
-            throw new Exception("Received unexpected control message in handshake: " + msg);
+        if(cMsg.type == ControlMessage.Type.HEARTBEAT) return;
 
-        FirstHandshakeMessage fhm = (FirstHandshakeMessage) cMsg;
-        if(validator.validateAttributes(fhm.attributes)){
-            ctx.channel().writeAndFlush(new NetworkMessage(NetworkMessage.CTRL_MSG, new SecondHandshakeMessage(myAttrs)));
-            ctx.fireUserEventTriggered(new HandshakeCompleted(fhm.attributes));
-            ctx.pipeline().remove(this);
+        if (cMsg.type == ControlMessage.Type.FIRST_HS) {
+            FirstHandshakeMessage fhm = (FirstHandshakeMessage) cMsg;
+            if (validator.validateAttributes(fhm.attributes)) {
+                ctx.channel().writeAndFlush(new NetworkMessage(NetworkMessage.CTRL_MSG, new SecondHandshakeMessage(myAttrs)));
+                ctx.fireUserEventTriggered(new HandshakeCompleted(fhm.attributes));
+                ctx.pipeline().remove(this);
+            } else {
+                ctx.channel().writeAndFlush(new NetworkMessage(NetworkMessage.CTRL_MSG, new InvalidAttributesMessage()));
+                throw new Exception("Invalid attributes received");
+            }
         } else {
-            ctx.channel().writeAndFlush(new NetworkMessage(NetworkMessage.CTRL_MSG, new InvalidAttributesMessage()));
-            throw new Exception("Invalid attributes received");
+            throw new Exception("Received unexpected control message in inHandshake: " + msg);
         }
     }
 }

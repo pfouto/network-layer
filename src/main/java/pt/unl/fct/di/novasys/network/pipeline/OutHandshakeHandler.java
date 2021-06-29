@@ -39,8 +39,11 @@ public class OutHandshakeHandler extends ChannelDuplexHandler {
 
         NetworkMessage msg = (NetworkMessage) obj;
         if (msg.code != NetworkMessage.CTRL_MSG)
-            throw new Exception("Received application message in handshake: " + msg);
+            throw new Exception("Received application message in outHandshake: " + msg);
+
         ControlMessage cMsg = (ControlMessage) msg.payload;
+        if(cMsg.type == ControlMessage.Type.HEARTBEAT) return;
+
         if(cMsg.type == ControlMessage.Type.SECOND_HS) {
             SecondHandshakeMessage shm = (SecondHandshakeMessage) cMsg;
             ctx.fireUserEventTriggered(new HandshakeCompleted(shm.attributes));
@@ -48,7 +51,7 @@ public class OutHandshakeHandler extends ChannelDuplexHandler {
         } else if (cMsg.type == ControlMessage.Type.INVALID_ATTR){
             throw new Exception("Attributes refused");
         } else {
-            throw new Exception("Received unexpected message in handshake: " + msg);
+            throw new Exception("Received unexpected control message in outHandshake: " + msg);
         }
     }
 }
