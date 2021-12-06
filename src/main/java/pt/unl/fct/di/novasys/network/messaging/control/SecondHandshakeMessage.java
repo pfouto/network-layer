@@ -7,27 +7,6 @@ import java.io.IOException;
 
 public class SecondHandshakeMessage extends ControlMessage {
 
-    public final int magicNumber;
-    public final Attributes attributes;
-
-    public SecondHandshakeMessage(Attributes attrs) {
-        this(MAGIC_NUMBER, attrs);
-    }
-
-    public SecondHandshakeMessage(int magicNumber, Attributes attrs) {
-        super(Type.SECOND_HS);
-        this.magicNumber = magicNumber;
-        this.attributes = attrs;
-    }
-
-    @Override
-    public String toString() {
-        return "SecondHSMessage{" +
-                "attributes=" + attributes +
-                "magicNumber=" + magicNumber +
-                '}';
-    }
-
     static ControlMessageSerializer serializer = new ControlMessageSerializer<SecondHandshakeMessage>() {
 
         public void serialize(SecondHandshakeMessage msg, ByteBuf out) throws IOException {
@@ -43,4 +22,24 @@ public class SecondHandshakeMessage extends ControlMessage {
             return new SecondHandshakeMessage(magicNumber, attributes);
         }
     };
+    public final int magicNumber;
+    public final Attributes attributes;
+
+    public SecondHandshakeMessage(Attributes attrs) {
+        this(MAGIC_NUMBER, attrs);
+    }
+
+    public SecondHandshakeMessage(int magicNumber, Attributes attrs) {
+        super(Type.SECOND_HS);
+        this.magicNumber = magicNumber;
+        this.attributes = attrs;
+    }
+
+    @Override
+    public String toString() {
+        return "SecondHandshakeMessage{" +
+                "attributes=" + attributes +
+                "magicNumber=" + magicNumber +
+                '}';
+    }
 }

@@ -141,8 +141,9 @@ public class NetworkManager<T> {
             protected void initChannel(SocketChannel ch) {
                 MessageEncoder<T> encoder = new MessageEncoder<>(serializer);
                 MessageDecoder<T> decoder = new MessageDecoder<>(serializer);
-                ch.pipeline().addLast("IdleHandler",
-                        new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
+                if(hbTolerance > 0 || hbInterval > 0)
+                    ch.pipeline().addLast("IdleHandler",
+                            new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
                 ch.pipeline().addLast("MessageDecoder", decoder);
                 ch.pipeline().addLast("MessageEncoder", encoder);
                 ch.pipeline().addLast("InHandshakeHandler", new InHandshakeHandler(validator, attrs));

@@ -17,7 +17,7 @@ public class OutHandshakeHandler extends ChannelDuplexHandler {
 
     private static final Logger logger = LogManager.getLogger(OutHandshakeHandler.class);
 
-    private Attributes attrs;
+    private final Attributes attrs;
 
     public OutHandshakeHandler(Attributes attrs) {
         this.attrs = attrs;

@@ -114,8 +114,8 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     public static final String LISTEN_ADDRESS_ATTRIBUTE = "listen_address";
 
     public final static String DEFAULT_PORT = "8573";
-    public final static String DEFAULT_HB_INTERVAL = "1000";
-    public final static String DEFAULT_HB_TOLERANCE = "3000";
+    public final static String DEFAULT_HB_INTERVAL = "0";
+    public final static String DEFAULT_HB_TOLERANCE = "0";
     public final static String DEFAULT_CONNECT_TIMEOUT = "1000";
     public final static String DEFAULT_METRICS_INTERVAL = "-1";
 

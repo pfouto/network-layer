@@ -7,14 +7,29 @@ import java.io.IOException;
 
 public class FirstHandshakeMessage extends ControlMessage {
 
-    public final Attributes attributes;
+    static ControlMessageSerializer serializer = new ControlMessageSerializer<FirstHandshakeMessage>() {
+
+        public void serialize(FirstHandshakeMessage msg, ByteBuf out) throws IOException {
+            out.writeInt(msg.magicNumber);
+            Attributes.serializer.serialize(msg.attributes, out);
+        }
+
+        public FirstHandshakeMessage deserialize(ByteBuf in) throws IOException {
+            int magicNumber = in.readInt();
+            if (magicNumber != MAGIC_NUMBER)
+                throw new RuntimeException("Invalid magic number: " + magicNumber);
+            Attributes attributes = Attributes.serializer.deserialize(in);
+            return new FirstHandshakeMessage(magicNumber, attributes);
+        }
+    };
     public final int magicNumber;
+    public final Attributes attributes;
 
     public FirstHandshakeMessage(Attributes attributes) {
-        this(attributes, MAGIC_NUMBER);
+        this(MAGIC_NUMBER, attributes);
     }
 
-    public FirstHandshakeMessage(Attributes attributes, int magicNumber) {
+    public FirstHandshakeMessage(int magicNumber, Attributes attributes) {
         super(Type.FIRST_HS);
         this.attributes = attributes;
         this.magicNumber = magicNumber;
@@ -27,20 +42,4 @@ public class FirstHandshakeMessage extends ControlMessage {
                 ", magicNumber=" + magicNumber +
                 '}';
     }
-
-    static ControlMessageSerializer serializer = new ControlMessageSerializer<FirstHandshakeMessage>() {
-
-        public void serialize(FirstHandshakeMessage msg, ByteBuf out) throws IOException {
-            out.writeInt(msg.magicNumber);
-            Attributes.serializer.serialize(msg.attributes, out);
-        }
-
-        public FirstHandshakeMessage deserialize(ByteBuf in) throws IOException {
-            int magicNumber = in.readInt();
-            if(magicNumber != MAGIC_NUMBER)
-                throw new RuntimeException("Invalid magic number: " + magicNumber);
-            Attributes attributes = Attributes.serializer.deserialize(in);
-            return new FirstHandshakeMessage(attributes, magicNumber);
-        }
-    };
 }

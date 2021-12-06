@@ -44,7 +44,9 @@ public class OutConnectionHandler<T> extends ConnectionHandler<T> implements Gen
         this.clientBootstrap.handler(new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
-                ch.pipeline().addLast("IdleHandler", new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
+                if(hbTolerance > 0 || hbInterval > 0)
+                    ch.pipeline().addLast("IdleHandler",
+                            new IdleStateHandler(hbTolerance, hbInterval, 0, MILLISECONDS));
                 ch.pipeline().addLast("MessageDecoder", decoder);
                 ch.pipeline().addLast("MessageEncoder", encoder);
                 ch.pipeline().addLast("OutHandshakeHandler", new OutHandshakeHandler(selfAttrs));
