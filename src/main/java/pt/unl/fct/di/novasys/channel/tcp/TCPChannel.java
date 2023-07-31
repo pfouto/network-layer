@@ -184,7 +184,7 @@ public class TCPChannel<T> extends SingleThreadedBiChannel<T, T> implements Attr
     }
 
     @Override
-    protected void onOpenConnection(Host peer) {
+    protected void onOpenConnection(Host peer, int connection) {
         ConnectionState<T> conState = outConnections.get(peer);
         if (conState == null) {
             logger.debug("onOpenConnection creating connection to: " + peer);

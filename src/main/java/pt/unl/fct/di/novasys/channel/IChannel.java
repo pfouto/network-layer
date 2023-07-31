@@ -8,5 +8,5 @@ public interface IChannel<T> {
 
     void closeConnection(Host peer, int connection);
 
-    void openConnection(Host peer);
+    void openConnection(Host peer, int connection);
 }

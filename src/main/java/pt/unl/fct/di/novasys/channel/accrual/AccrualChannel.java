@@ -134,7 +134,7 @@ public class AccrualChannel<T> extends SingleThreadedBiChannel<T, AccrualMessage
     }
 
     @Override
-    protected void onOpenConnection(Host peer) {
+    protected void onOpenConnection(Host peer, int connection) {
         OutConnectionState<AccrualMessage<T>> conState = outConnections.get(peer);
         if (conState == null) {
             logger.debug("onOpenConnection creating connection to: " + peer);

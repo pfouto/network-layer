@@ -133,7 +133,7 @@ public class SimpleServerChannel<T> extends SingleThreadedServerChannel<T, T> im
     }
 
     @Override
-    protected void onOpenConnection(Host peer) {
+    protected void onOpenConnection(Host peer, int connection) {
         throw new UnsupportedOperationException("I am Server, not Client");
     }
 

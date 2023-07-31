@@ -191,7 +191,7 @@ public class AckosChannel<T> extends SingleThreadedBiChannel<T, AckosMessage<T>>
     }
 
     @Override
-    protected void onOpenConnection(Host peer) {
+    protected void onOpenConnection(Host peer, int connection) {
         throw new NotImplementedException("Pls fix me");
     }
 
