@@ -93,7 +93,7 @@ public class MultithreadedTCPChannel<T> implements IChannel<T>, MessageListener<
     }
 
     @Override
-    public void openConnection(Host peer) {
+    public void openConnection(Host peer, int connection) {
         if (establishedOut.containsKey(peer)) return;
         pendingOut.computeIfAbsent(peer, k ->
                 Pair.of(network.createConnection(peer, attributes, this), new LinkedList<>()));

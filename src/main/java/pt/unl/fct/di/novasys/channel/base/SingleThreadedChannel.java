@@ -46,10 +46,10 @@ public abstract class SingleThreadedChannel<T, Y> implements IChannel<T>, Messag
     protected abstract void onDeliverMessage(Y msg, Connection<Y> conn);
 
     @Override
-    public void openConnection(Host peer) {
-        loop.execute(() -> onOpenConnection(peer));
+    public void openConnection(Host peer, int connection) {
+        loop.execute(() -> onOpenConnection(peer, connection));
     }
 
-    protected abstract void onOpenConnection(Host peer);
+    protected abstract void onOpenConnection(Host peer, int connection);
 
 }

@@ -88,7 +88,7 @@ public class SimpleClientChannel<T> extends SingleThreadedClientChannel<T, T> {
     }
 
     @Override
-    protected void onOpenConnection(Host peer) {
+    protected void onOpenConnection(Host peer, int conn) {
         connection = network.createConnection(serverAddress, SIMPLE_CLIENT_ATTRIBUTES, this);
         state = State.CONNECTING;
     }
